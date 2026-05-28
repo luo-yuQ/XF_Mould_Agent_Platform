@@ -9,7 +9,7 @@ load_dotenv()
 # =============================================================================
 # LLM 配置（阿里百炼 DashScope）
 # =============================================================================
-DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "sk-610e2202c2584c53a19e611989f32f1f")
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.5-27b")
