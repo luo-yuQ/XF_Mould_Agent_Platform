@@ -1,0 +1,15 @@
+langgraph>=0.0.20
+langchain-core>=0.1.0
+langchain-openai>=0.0.2
+langchain-text-splitters>=0.0.1
+pymilvus[milvus_lite]>=2.4.0
+openai>=1.0.0
+PyMuPDF>=1.23.0
+pydantic>=2.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+streamlit>=1.28.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+redis>=5.0
+partial-json-parser>=0.2.0

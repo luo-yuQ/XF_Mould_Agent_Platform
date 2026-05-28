@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda run *)",
+      "Bash(\"C:/Users/Administrator/miniconda3/envs/mould_agent/python.exe\" \"c:\\\\Users\\\\Administrator\\\\Desktop\\\\gz yanyi xia\\\\shi_xi lyq\\\\XF_Mould_Agent_Platform\\\\_check_api.py\")",
+      "mcp__MiniMax__web_search",
+      "WebSearch",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
