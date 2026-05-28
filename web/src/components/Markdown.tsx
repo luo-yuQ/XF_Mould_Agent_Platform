@@ -15,7 +15,9 @@ export default function Markdown({ content, citations }: Props) {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-  let result = escapeHtml(content);
+  // 清洗 LLM 输出的字面量 <br>，防止在页面上显示为文本
+  let result = escapeHtml(content)
+    .replace(/&lt;br\s*\/?&gt;/gi, "<br/>");
 
   // 代码块 ```...```
   result = result.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
@@ -105,7 +107,7 @@ function _renderTable(lines: string[]): string {
 
   const headerLine = lines[0];
   const dataLines = lines.slice(
-    lines[1].replace(/\|/g, "").trim().match(/^[-:]+$/) ? 2 : 1
+    lines[1].replace(/\|/g, "").replace(/\s/g, "").match(/^[-:]+$/) ? 2 : 1
   );
 
   const headers = parseRow(headerLine);
@@ -123,5 +125,5 @@ function _renderTable(lines: string[]): string {
     html += "</tr>";
   }
   html += "</tbody></table>";
-  return html;
+  return `<div class="markdown-table-wrapper">${html}</div>`;
 }

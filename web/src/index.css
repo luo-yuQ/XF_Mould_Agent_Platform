@@ -292,6 +292,7 @@ body {
 }
 
 .message-bubble {
+  width: 100%;
   max-width: 85%;
   padding: 12px 16px;
   border-radius: var(--radius);
@@ -347,20 +348,33 @@ body {
   color: inherit;
 }
 
-.message-content table {
-  border-collapse: collapse;
+/* ---- Markdown 表格横向滚动容器 ---- */
+.markdown-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin: 8px 0;
+}
+
+.markdown-table-wrapper table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
   font-size: 14px;
 }
 
-.message-content th,
-.message-content td {
+.markdown-table-wrapper th,
+.markdown-table-wrapper td {
   border: 1px solid var(--border);
   padding: 6px 12px;
   text-align: left;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  writing-mode: horizontal-tb;
 }
 
-.message-content th {
+.markdown-table-wrapper th {
   background: #f3f4f6;
   font-weight: 600;
 }
