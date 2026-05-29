@@ -32,7 +32,7 @@ MILVUS_COLLECTION_QUALITY = "xf_quality_kb"
 # 文档路径
 # =============================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOCS_DIR = r"C:\Users\Administrator\Desktop\gz yanyi xia\shi_xi lyq\XF_Mould_Agent_Platform\papers"
+DOCS_DIR = os.path.join(BASE_DIR, "papers")
 FMEA_DOC_PATH = os.path.join(DOCS_DIR, "FMEA手册-2019年6月5版(1).docx")
 QUALITY_DOC_PATH = os.path.join(DOCS_DIR, "XF模具VDA6.4质量手册.pdf")
 

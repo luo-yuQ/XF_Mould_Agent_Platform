@@ -25,22 +25,6 @@ llm = ChatOpenAI(
     extra_body={"thinking": {"type": "disabled"}},
 )
 
-llm_cheap = ChatOpenAI(
-    model=LLM_MODEL,
-    temperature=0.0,
-    api_key=DASHSCOPE_API_KEY,
-    base_url=DASHSCOPE_BASE_URL,
-    extra_body={"thinking": {"type": "disabled"}},
-)
-
-llm_json = ChatOpenAI(
-    model=LLM_MODEL,
-    temperature=LLM_TEMPERATURE,
-    api_key=DASHSCOPE_API_KEY,
-    base_url=DASHSCOPE_BASE_URL,
-    extra_body={"thinking": {"type": "disabled"}},
-)
-
 # =============================================================================
 # 辅助函数
 # =============================================================================
@@ -70,31 +54,20 @@ QA_RAG_PROMPT = """你是一个质量管理体系检索专家。
 qa_rag_system = SystemMessage(content=QA_RAG_PROMPT)
 
 
+import asyncio
+
 async def qa_rag_node(state: AgentState) -> AgentState:
-    """质量 RAG 节点：LLM 生成搜索词 → 结构化检索（一次检索，双格式输出）"""
+    """质量 RAG 节点：直接使用用户输入检索，不额外调 LLM 生成搜索词"""
     messages = list(state["messages"])
     user_query = _extract_user_query(messages)
 
     print(f"\n[质量 Agent - RAG] 用户问题: {user_query[:80]}...")
 
-    prompt = f"用户问题: {user_query}\n\n请生成搜索词并调用 quality_rag_search 工具。"
-    local_messages = [qa_rag_system, HumanMessage(content=prompt)]
-
-    ai_msg = await llm.ainvoke(local_messages)
-
-    # 提取 LLM 生成的搜索词
-    search_query = user_query
-    if ai_msg.tool_calls:
-        print(f"[质量 Agent - RAG] Tool Call: {[c['name'] for c in ai_msg.tool_calls]}")
-        for tc in ai_msg.tool_calls:
-            if tc.get("name") == "quality_rag_search":
-                search_query = tc.get("args", {}).get("query", user_query)
-                break
-
-    print(f"[质量 Agent - RAG] 搜索词: {search_query[:80]}...")
-
-    # 一次检索，两用
-    rag_chunks = retrieve_structured(search_query, MILVUS_COLLECTION_QUALITY)
+    # 同步检索（embedding API + Milvus）丢到线程池，避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    rag_chunks = await loop.run_in_executor(
+        None, retrieve_structured, user_query, MILVUS_COLLECTION_QUALITY
+    )
     tool_result = chunks_to_text(rag_chunks)
 
     print(f"[质量 Agent - RAG] 检索结果: {len(rag_chunks)} chunks")
@@ -105,72 +78,6 @@ async def qa_rag_node(state: AgentState) -> AgentState:
         "rag_result": tool_result,
         "rag_chunks": rag_chunks,
         "rag_is_relevant": False,
-        "task_completed": False,
-    }
-
-
-# =============================================================================
-# 相关性评估节点
-# =============================================================================
-GRADER_PROMPT = """你是一个信息相关性评判员。
-
-判断检索到的内容是否与用户问题相关：
-- 相关：内容与用户问题在同一领域，提供了相关信息
-- 不相关：内容与问题无关，或检索结果为空/出错
-
-输出 JSON：{"is_relevant": true/false}
-"""
-
-grader_system = SystemMessage(content=GRADER_PROMPT)
-
-
-async def qa_grader_node(state: AgentState) -> AgentState:
-    """评估 RAG 检索结果的相关性"""
-    messages = list(state["messages"])
-    rag_result = state.get("rag_result", "")
-    rag_chunks = state.get("rag_chunks", [])
-    user_query = _extract_user_query(messages)
-
-    print(f"\n[质量 Agent - Grader] 评估中...")
-
-    if not rag_result or "未检索到相关内容" in rag_result or "未初始化" in rag_result:
-        print(f"[质量 Agent - Grader] 结果为空，标记不相关")
-        return {
-            "messages": messages,
-            "sender": "qa_grader",
-            "rag_result": rag_result,
-            "rag_chunks": rag_chunks,
-            "rag_is_relevant": False,
-            "task_completed": False,
-        }
-
-    grade_prompt = f"""用户问题：{user_query}
-
-检索到的内容：
-{rag_result[:2000]}
-
-请判断相关性，输出 JSON。"""
-
-    local_messages = [grader_system, HumanMessage(content=grade_prompt)]
-    resp = await llm_cheap.ainvoke(local_messages)
-    raw = resp.content if hasattr(resp, "content") else str(resp)
-
-    is_relevant = False
-    try:
-        match = re.search(r'\{.*?"is_relevant".*?\}', raw, re.DOTALL)
-        if match:
-            data = json.loads(match.group())
-            is_relevant = data.get("is_relevant", False)
-    except Exception:
-        pass
-
-    print(f"[质量 Agent - Grader] 相关: {is_relevant}")
-    return {
-        "messages": messages,
-        "sender": "qa_grader",
-        "rag_result": rag_result,
-        "rag_chunks": rag_chunks,
-        "rag_is_relevant": is_relevant,
         "task_completed": False,
     }
 
@@ -221,16 +128,15 @@ async def qa_writer_node(state: AgentState) -> AgentState:
     """质量 Writer 节点：JSON Mode 输出，生成含 [id] 引用的回答"""
     messages = list(state["messages"])
     rag_chunks = state.get("rag_chunks", [])
-    rag_is_relevant = state.get("rag_is_relevant", False)
     user_query = _extract_user_query(messages)
 
     print(f"\n[质量 Agent - Writer] 生成回答...")
-    print(f"[质量 Agent - Writer] rag_is_relevant={rag_is_relevant}, chunks={len(rag_chunks)}")
+    print(f"[质量 Agent - Writer] chunks={len(rag_chunks)}")
 
-    # 构建 citation_map 和引用文本
+    # 只要有检索结果就构建 citation_map 和引用文本，不依赖 grader 的判断
     citation_map = {}
     chunks_text = ""
-    if rag_is_relevant and rag_chunks:
+    if rag_chunks:
         for i, chunk in enumerate(rag_chunks, 1):
             citation_map[i] = {
                 "source": chunk.get("doc_source", ""),
@@ -298,6 +204,9 @@ async def qa_writer_node(state: AgentState) -> AgentState:
             citation_ids = [int(x.strip()) for x in ids_match.group(1).split(",") if x.strip().isdigit()]
         citation_ids = citation_ids or list(citation_map.keys())
 
+    # 过滤：只保留 citation_map 中真实存在的 ID
+    citation_ids = [cid for cid in citation_ids if cid in citation_map]
+
     if not answer_text:
         answer_text = "抱歉，未能生成回答。"
 
@@ -306,7 +215,7 @@ async def qa_writer_node(state: AgentState) -> AgentState:
         "sender": "qa_writer",
         "rag_result": state.get("rag_result", ""),
         "rag_chunks": rag_chunks,
-        "rag_is_relevant": rag_is_relevant,
+        "rag_is_relevant": bool(citation_ids),
         "citation_map": citation_map,
         "citation_ids": citation_ids,
         "task_completed": True,

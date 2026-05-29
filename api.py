@@ -98,10 +98,8 @@ def _build_state(request: AskRequest) -> AgentState:
 NODE_STATUS = {
     "supervisor": "正在分析问题意图...",
     "rd_rag": "正在检索 FMEA 手册...",
-    "rd_grader": "正在评估检索相关性...",
     "rd_writer": "正在生成 FMEA 回答...",
     "qa_rag": "正在检索质量手册...",
-    "qa_grader": "正在评估检索相关性...",
     "qa_writer": "正在生成质量回答...",
     "chat_chat": "正在处理您的询问...",
 }
@@ -176,12 +174,8 @@ async def ask_stream(request: AskRequest):
 
     async def event_generator():
         try:
-            from partial_json_parser import loads as partial_loads
-
             is_writer_active = False
-            json_buffer = ""
-            last_answer_len = 0
-            stream_depth = 0  # 追踪嵌套深度，处理 writer 内部多 Runnable 的情况
+            stream_depth = 0
 
             async for event in agent.astream_events(state, version="v2", config={"recursion_limit": 12}):
                 kind = event.get("event", "")
@@ -195,8 +189,6 @@ async def ask_stream(request: AskRequest):
                     })
                     if name in WRITER_NODES:
                         is_writer_active = True
-                        json_buffer = ""
-                        last_answer_len = 0
                         stream_depth = 1
 
                 elif kind == "on_chain_start" and is_writer_active:
@@ -209,23 +201,7 @@ async def ask_stream(request: AskRequest):
                         continue
 
                     if is_writer_active:
-                        # JSON Mode: 增量解析，只提取 answer 字段
-                        json_buffer += chunk.content
-                        try:
-                            parsed = partial_loads(json_buffer)
-                            if isinstance(parsed, dict) and "answer" in parsed:
-                                answer = parsed["answer"] or ""
-                                if len(answer) > last_answer_len:
-                                    delta = answer[last_answer_len:]
-                                    last_answer_len = len(answer)
-                                    if delta:
-                                        yield _sse_event("token", {"content": delta})
-                        except Exception:
-                            # partial_loads 可能对极度残缺的 JSON 抛异常，跳过
-                            pass
-                    else:
-                        # 非 Writer 节点（supervisor/grader），静默跳过
-                        pass
+                        yield _sse_event("token", {"content": chunk.content})
 
                 # ---- 节点/chain 结束 ----
                 elif kind == "on_chain_end":
@@ -233,13 +209,11 @@ async def ask_stream(request: AskRequest):
                         stream_depth -= 1
                         if stream_depth <= 0:
                             is_writer_active = False
-                            json_buffer = ""
-                            last_answer_len = 0
                             stream_depth = 0
 
                     if isinstance(event.get("data", {}).get("output"), dict):
                         out = event["data"]["output"]
-                        if "next_agent" in out:
+                        if "next_agent" in out or "task_completed" in out:
                             final_state.update(out)
 
             # ---- 流结束 → 发送 done 事件 ----

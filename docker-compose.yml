@@ -104,10 +104,12 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-qwen3.5-27b}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-async-v1}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v4}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
       MILVUS_URI: http://milvus:19530
       REDIS_HOST: redis
+    volumes:
+      - ./papers:/app/papers:ro  # 文档目录，用于首次知识库导入
     depends_on:
       milvus:
         condition: service_healthy

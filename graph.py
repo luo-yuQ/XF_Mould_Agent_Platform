@@ -6,8 +6,8 @@ from typing import Literal
 from langgraph.graph import StateGraph, START, END
 from state import AgentState
 from agents.supervisor import supervisor_node
-from agents.rd_agent import rd_rag_node, rd_grader_node, rd_writer_node
-from agents.quality_agent import qa_rag_node, qa_grader_node, qa_writer_node
+from agents.rd_agent import rd_rag_node, rd_writer_node
+from agents.quality_agent import qa_rag_node, qa_writer_node
 from agents.chat_agent import chat_chat_node
 
 
@@ -23,12 +23,10 @@ def build_graph():
 
     # 研发子图（R&D Agent）
     workflow.add_node("rd_rag", rd_rag_node)
-    workflow.add_node("rd_grader", rd_grader_node)
     workflow.add_node("rd_writer", rd_writer_node)
 
     # 质量子图（Quality Agent）
     workflow.add_node("qa_rag", qa_rag_node)
-    workflow.add_node("qa_grader", qa_grader_node)
     workflow.add_node("qa_writer", qa_writer_node)
 
     # 闲聊节点（Chat Agent）
@@ -60,36 +58,10 @@ def build_graph():
     )
 
     # =============================================================================
-    # 研发子图内部路由: RAG → Grader → Writer
+    # 子图内部路由: RAG → Writer（直连，无 grader）
     # =============================================================================
-    workflow.add_edge("rd_rag", "rd_grader")
-
-    def rd_grader_router(state: AgentState) -> Literal["rd_writer"]:
-        relevant = state.get("rag_is_relevant", False)
-        print(f"[R&D Router] rag_is_relevant={relevant}")
-        return "rd_writer"
-
-    workflow.add_conditional_edges(
-        "rd_grader",
-        rd_grader_router,
-        {"rd_writer": "rd_writer"},
-    )
-
-    # =============================================================================
-    # 质量子图内部路由: RAG → Grader → Writer
-    # =============================================================================
-    workflow.add_edge("qa_rag", "qa_grader")
-
-    def qa_grader_router(state: AgentState) -> Literal["qa_writer"]:
-        relevant = state.get("rag_is_relevant", False)
-        print(f"[质量 Router] rag_is_relevant={relevant}")
-        return "qa_writer"
-
-    workflow.add_conditional_edges(
-        "qa_grader",
-        qa_grader_router,
-        {"qa_writer": "qa_writer"},
-    )
+    workflow.add_edge("rd_rag", "rd_writer")
+    workflow.add_edge("qa_rag", "qa_writer")
 
     # =============================================================================
     # 最终输出

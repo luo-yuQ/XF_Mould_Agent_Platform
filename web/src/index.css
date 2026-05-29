@@ -271,7 +271,7 @@ body {
 .message-row {
   display: flex;
   gap: 12px;
-  max-width: 768px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 12px 24px;
 }
@@ -354,29 +354,51 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   margin: 8px 0;
+  /* 滚动阴影提示 */
+  background:
+    linear-gradient(to right, white 30%, rgba(255,255,255,0)),
+    linear-gradient(to left, white 30%, rgba(255,255,255,0)) 100% 0,
+    linear-gradient(to right, rgba(0,0,0,0.08), rgba(0,0,0,0)),
+    linear-gradient(to left, rgba(0,0,0,0.08), rgba(0,0,0,0)) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .markdown-table-wrapper table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .markdown-table-wrapper th,
 .markdown-table-wrapper td {
   border: 1px solid var(--border);
-  padding: 6px 12px;
+  padding: 4px 10px;
   text-align: left;
   white-space: normal;
   word-break: normal;
   overflow-wrap: normal;
   writing-mode: horizontal-tb;
+  vertical-align: top;
 }
 
 .markdown-table-wrapper th {
   background: #f3f4f6;
   font-weight: 600;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+
+.markdown-table-wrapper tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.markdown-table-wrapper tbody tr:hover {
+  background: #f0f4ff;
 }
 
 .message-content hr {

@@ -1,0 +1,29 @@
+# 环境变量（含敏感信息）
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Claude / Agent 内部配置
+.claude/
+.agents/
+skills-lock.json
+
+# 测试输出
+test_output/
+
+# 文档数据（大文件，需手动拷贝到服务器）
+papers/
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
