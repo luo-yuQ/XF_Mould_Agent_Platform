@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     # ============ Supervisor 产出 ============
     next_agent: str       # "rd" / "quality"
     intent: str           # 意图标签
+    agent_override: str   # 用户手动指定: "" / "rd" / "quality"（空串=自动）
 
     # ============ RAG 检索结果 ============
     rag_result: str       # 向量检索原始文本（兼容旧协议）

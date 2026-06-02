@@ -1,38 +1,47 @@
 import type { Session } from "../types";
 
-const STORAGE_KEY = "xf_mould_sessions";
-const CURRENT_KEY = "xf_mould_current";
+const SESSIONS_KEY = (userId: number | string) => `xf_mould_sessions_${userId}`;
+const CURRENT_KEY = (userId: number | string) => `xf_mould_current_${userId}`;
 
-/** 加载所有会话 */
-export function loadSessions(): Record<string, Session> {
+export function loadSessions(userId: number | string): Record<string, Session> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SESSIONS_KEY(userId));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-/** 保存所有会话 */
-export function saveSessions(sessions: Record<string, Session>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+export function saveSessions(
+  userId: number | string,
+  sessions: Record<string, Session>
+): void {
+  localStorage.setItem(SESSIONS_KEY(userId), JSON.stringify(sessions));
 }
 
-/** 获取当前会话 ID */
-export function getCurrentSessionId(): string | null {
-  return localStorage.getItem(CURRENT_KEY);
+export function getCurrentSessionId(
+  userId: number | string
+): string | null {
+  return localStorage.getItem(CURRENT_KEY(userId));
 }
 
-/** 设置当前会话 ID */
-export function setCurrentSessionId(id: string | null): void {
+export function setCurrentSessionId(
+  userId: number | string,
+  id: string | null
+): void {
+  const key = CURRENT_KEY(userId);
   if (id) {
-    localStorage.setItem(CURRENT_KEY, id);
+    localStorage.setItem(key, id);
   } else {
-    localStorage.removeItem(CURRENT_KEY);
+    localStorage.removeItem(key);
   }
 }
 
-/** 生成会话 ID */
+export function clearUserData(userId: number | string): void {
+  localStorage.removeItem(SESSIONS_KEY(userId));
+  localStorage.removeItem(CURRENT_KEY(userId));
+}
+
 export function generateSessionId(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -42,7 +51,6 @@ export function generateSessionId(): string {
   );
 }
 
-/** 创建新会话 */
 export function createSession(title?: string): Session {
   return {
     id: generateSessionId(),

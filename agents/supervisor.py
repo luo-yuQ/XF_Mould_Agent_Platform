@@ -75,10 +75,29 @@ class RouteDecision(BaseModel):
 async def supervisor_node(state: AgentState) -> AgentState:
     """
     Supervisor 节点：意图识别 + 宏观路由
+    如果用户手动指定了 agent_override，跳过 LLM 分类直接路由
     """
     messages = list(state["messages"])
-    last_msg = messages[-1].content if messages else ""
 
+    # 用户手动指定智能体，跳过 LLM 分类
+    override = state.get("agent_override", "")
+    if override in ("rd", "quality"):
+        print(f"\n[Supervisor] 用户指定路由: {override}，跳过意图识别")
+        return {
+            "messages": messages,
+            "sender": "supervisor",
+            "next_agent": override,
+            "intent": f"user_override_{override}",
+            "agent_override": override,
+            "rag_result": "",
+            "rag_chunks": [],
+            "citation_map": {},
+            "citation_ids": [],
+            "rag_is_relevant": False,
+            "task_completed": False,
+        }
+
+    last_msg = messages[-1].content if messages else ""
     print(f"\n[Supervisor] 分析用户输入: {str(last_msg)[:80]}...")
 
     prompt_messages = [SystemMessage(content=SUPERVISOR_PROMPT)] + messages

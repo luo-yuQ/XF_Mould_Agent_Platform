@@ -2,129 +2,380 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { Session, Message } from "./types";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
-import {
-  loadSessions,
-  saveSessions,
-  getCurrentSessionId,
-  setCurrentSessionId,
-  createSession,
-} from "./utils/storage";
+import AuthPage from "./pages/AuthPage";
 
 export default function App() {
-  const [sessions, setSessions] = useState<Record<string, Session>>(() =>
-    loadSessions()
-  );
-  const [currentId, setCurrentId] = useState<string | null>(() =>
-    getCurrentSessionId()
-  );
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [currentUser, setCurrentUser] = useState<{ id: number; username: string } | null>(null);
+  const [sessions, setSessions] = useState<Record<string, Session>>({});
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
   const [status, setStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const streamSessionRef = useRef<string | null>(null);
+  // LRU 缓存：保留最近 3 个会话的消息
+  const LRU_CACHE_SIZE = 3;
+  const loadedOrderRef = useRef<string[]>([]);
 
-  // 确保至少有一个会话
-  useEffect(() => {
-    const ids = Object.keys(sessions);
-    if (ids.length === 0) {
-      const s = createSession();
-      setSessions({ [s.id]: s });
-      setCurrentId(s.id);
-      setCurrentSessionId(s.id);
-    } else if (!currentId || !sessions[currentId]) {
-      const latestId = ids.sort(
-        (a, b) => (sessions[b]?.createdAt || 0) - (sessions[a]?.createdAt || 0)
-      )[0];
-      setCurrentId(latestId);
-      setCurrentSessionId(latestId);
+  // 加载当前登录用户（启动时 + 登录成功后都调一次）
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetch("/auth/me", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser({ id: data.id, username: data.username });
+        setAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setAuthenticated(false);
+      }
+    } catch {
+      setCurrentUser(null);
+      setAuthenticated(false);
+    } finally {
+      setCheckingAuth(false);
     }
   }, []);
 
-  // 持久化
   useEffect(() => {
-    saveSessions(sessions);
-  }, [sessions]);
+    loadCurrentUser();
+  }, [loadCurrentUser]);
 
+  // 登录后从后端拉会话列表
   useEffect(() => {
-    setCurrentSessionId(currentId);
-  }, [currentId]);
+    if (!currentUser) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/chat/sessions", { credentials: "include" });
+        if (!res.ok) return;
+        const list: Array<{ id: string; title: string; created_at: string; updated_at: string }> =
+          await res.json();
+        if (cancelled) return;
+        const map: Record<string, Session> = {};
+        for (const s of list) {
+          map[s.id] = {
+            id: s.id,
+            title: s.title,
+            createdAt: new Date(s.created_at).getTime(),
+            updatedAt: new Date(s.updated_at).getTime(),
+            messages: [],
+            loaded: false,
+          };
+        }
+        setSessions(map);
+        if (list.length > 0) {
+          setCurrentId(list[0].id);
+        } else {
+          // 没有任何会话时自动开一个
+          const created = await fetch("/chat/sessions", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          if (created.ok) {
+            const s = await created.json();
+            if (!cancelled) {
+              const newSession: Session = {
+                id: s.id,
+                title: s.title,
+                createdAt: new Date(s.created_at).getTime(),
+                updatedAt: new Date(s.updated_at).getTime(),
+                messages: [],
+                loaded: true,
+              };
+              setSessions({ [s.id]: newSession });
+              setCurrentId(s.id);
+            }
+          }
+        }
+      } catch {
+        // 静默失败
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
+
+  // 切换会话时拉取消息（3 条 LRU 缓存 + 分页首屏 20 条）
+  useEffect(() => {
+    if (!currentId) return;
+    const session = sessions[currentId];
+    if (session?.loaded) {
+      // 缓存命中，移到 MRU 位置
+      loadedOrderRef.current = [
+        ...loadedOrderRef.current.filter((id) => id !== currentId),
+        currentId,
+      ];
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/chat/sessions/${currentId}/messages?limit=20`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const list: Array<{
+          id: number;
+          role: string;
+          content: string;
+          agent_type: string | null;
+          citations: any[] | null;
+        }> = await res.json();
+        if (cancelled) return;
+        const msgs: Message[] = list.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          agentType: m.agent_type || "",
+          citations: m.citations || [],
+        }));
+        setSessions((prev) => {
+          const order = loadedOrderRef.current;
+          const next = { ...prev };
+
+          // LRU 淘汰最旧的非当前会话
+          while (order.length >= LRU_CACHE_SIZE) {
+            const evictId = order.shift();
+            if (!evictId || evictId === currentId) continue;
+            if (next[evictId]) {
+              next[evictId] = {
+                ...next[evictId],
+                messages: [],
+                loaded: false,
+                hasMore: false,
+                oldestLoadedId: undefined,
+                loadingOlder: false,
+              };
+            }
+          }
+          if (!order.includes(currentId)) {
+            order.push(currentId);
+          }
+
+          if (next[currentId]) {
+            next[currentId] = {
+              ...next[currentId],
+              messages: msgs,
+              loaded: true,
+              hasMore: msgs.length === 20,
+              oldestLoadedId: msgs[0]?.id,
+              loadingOlder: false,
+            };
+          }
+          return next;
+        });
+      } catch {
+        // 静默失败
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentId, sessions]);
+
+  // 加载更早的消息（向上滚动触发）
+  const loadOlderMessages = useCallback(async () => {
+    if (!currentId) return;
+    const session = sessions[currentId];
+    if (!session || !session.hasMore || session.loadingOlder || !session.oldestLoadedId) return;
+
+    setSessions((prev) => ({
+      ...prev,
+      [currentId]: { ...prev[currentId], loadingOlder: true },
+    }));
+
+    try {
+      const res = await fetch(
+        `/chat/sessions/${currentId}/messages?limit=20&before_id=${session.oldestLoadedId}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) {
+        setSessions((prev) => ({
+          ...prev,
+          [currentId]: { ...prev[currentId], loadingOlder: false },
+        }));
+        return;
+      }
+      const list: Array<{
+        id: number;
+        role: string;
+        content: string;
+        agent_type: string | null;
+        citations: any[] | null;
+      }> = await res.json();
+      const olderMsgs: Message[] = list.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        agentType: m.agent_type || "",
+        citations: m.citations || [],
+      }));
+      setSessions((prev) => {
+        const s = prev[currentId];
+        if (!s) return prev;
+        return {
+          ...prev,
+          [currentId]: {
+            ...s,
+            messages: [...olderMsgs, ...s.messages],
+            hasMore: olderMsgs.length === 20,
+            oldestLoadedId: olderMsgs[0]?.id ?? s.oldestLoadedId,
+            loadingOlder: false,
+          },
+        };
+      });
+    } catch {
+      setSessions((prev) => ({
+        ...prev,
+        [currentId]: { ...prev[currentId], loadingOlder: false },
+      }));
+    }
+  }, [currentId, sessions]);
 
   const currentSession = currentId ? sessions[currentId] : null;
 
-  const handleNewSession = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     abortRef.current?.abort();
-    const s = createSession();
-    setSessions((prev) => ({ ...prev, [s.id]: s }));
-    setCurrentId(s.id);
+    abortRef.current = null;
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // 忽略网络错误
+    }
+    setCurrentUser(null);
+    setAuthenticated(false);
+    setSessions({});
+    setCurrentId(null);
     setStreamingContent("");
+    setStatus("");
     setIsStreaming(false);
   }, []);
 
+  const handleUpdateTitle = useCallback(
+    async (id: string, title: string): Promise<boolean> => {
+      try {
+        const res = await fetch(`/chat/sessions/${id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (!res.ok) return false;
+        const updated = await res.json();
+        setSessions((prev) => ({
+          ...prev,
+          [id]: { ...prev[id], title: updated.title },
+        }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
+  const handleNewSession = useCallback(async () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStreamingContent("");
+    setStatus("");
+    setIsStreaming(false);
+    try {
+      const res = await fetch("/chat/sessions", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) return;
+      const s = await res.json();
+      const newSession: Session = {
+        id: s.id,
+        title: s.title,
+        createdAt: new Date(s.created_at).getTime(),
+        updatedAt: new Date(s.updated_at).getTime(),
+        messages: [],
+        loaded: true,
+      };
+      setSessions((prev) => ({ ...prev, [s.id]: newSession }));
+      setCurrentId(s.id);
+      setStreamingContent("");
+      setIsStreaming(false);
+    } catch {
+      // 静默失败
+    }
+  }, []);
+
   const handleDeleteSession = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      try {
+        await fetch(`/chat/sessions/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } catch {
+        // 即便后端失败也清理本地，避免出现鬼影会话
+      }
+      loadedOrderRef.current = loadedOrderRef.current.filter((x) => x !== id);
       setSessions((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
       });
       if (currentId === id) {
-        const remaining = Object.keys(sessions).filter((k) => k !== id);
-        if (remaining.length > 0) {
-          const latestId = remaining.sort(
+        const remaining = Object.keys(sessions)
+          .filter((k) => k !== id)
+          .sort(
             (a, b) =>
               (sessions[b]?.createdAt || 0) - (sessions[a]?.createdAt || 0)
-          )[0];
-          setCurrentId(latestId);
+          );
+        if (remaining.length > 0) {
+          setCurrentId(remaining[0]);
         } else {
-          const s = createSession();
-          setSessions((prev) => ({ ...prev, [s.id]: s }));
-          setCurrentId(s.id);
+          handleNewSession();
         }
       }
     },
-    [currentId, sessions]
+    [currentId, sessions, handleNewSession]
   );
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, agentOverride: string = "") => {
       if (!currentId || isStreaming) return;
 
       const session = sessions[currentId];
       if (!session) return;
 
       const userMsg: Message = { role: "user", content: text };
-      const updatedSession = {
-        ...session,
-        title:
-          session.messages.length === 0
-            ? text.slice(0, 30) + (text.length > 30 ? "..." : "")
-            : session.title,
-        messages: [...session.messages, userMsg],
-      };
-      setSessions((prev) => ({ ...prev, [currentId]: updatedSession }));
+      setSessions((prev) => ({
+        ...prev,
+        [currentId]: {
+          ...prev[currentId],
+          messages: [...(prev[currentId]?.messages || []), userMsg],
+        },
+      }));
       setStreamingContent("");
       setStatus("");
       setIsStreaming(true);
-      streamSessionRef.current = currentId;
 
       const controller = new AbortController();
       abortRef.current = controller;
 
       try {
-        const history = updatedSession.messages.slice(
-          0,
-          updatedSession.messages.length - 1
-        );
-
-        const chatHistory = history.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
         const response = await fetch("/api/ask/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: text, chat_history: chatHistory }),
+          credentials: "include",
+          body: JSON.stringify({ session_id: currentId, question: text, agent_override: agentOverride }),
           signal: controller.signal,
         });
 
@@ -152,6 +403,7 @@ export default function App() {
             } else if (line.startsWith("data: ")) {
               try {
                 const data = JSON.parse(line.slice(6));
+
                 if (currentEvent === "status") {
                   setStatus(data.message || "");
                 } else if (currentEvent === "token" && data.content) {
@@ -164,13 +416,14 @@ export default function App() {
                   setIsStreaming(false);
 
                   setSessions((prev) => {
-                    const sid = streamSessionRef.current;
-                    if (!sid || !prev[sid]) return prev;
-                    const s = prev[sid];
+                    if (!prev[currentId]) return prev;
+                    const s = prev[currentId];
+                    const newTitle = data.title ?? null;
                     return {
                       ...prev,
-                      [sid]: {
+                      [currentId]: {
                         ...s,
+                        title: newTitle ?? s.title,
                         messages: [
                           ...s.messages,
                           {
@@ -199,12 +452,11 @@ export default function App() {
           setStatus("");
           setIsStreaming(false);
           setSessions((prev) => {
-            const sid = streamSessionRef.current;
-            if (!sid || !prev[sid]) return prev;
-            const s = prev[sid];
+            if (!prev[currentId]) return prev;
+            const s = prev[currentId];
             return {
               ...prev,
-              [sid]: {
+              [currentId]: {
                 ...s,
                 messages: [
                   ...s.messages,
@@ -219,27 +471,42 @@ export default function App() {
         }
       } finally {
         abortRef.current = null;
-        if (streamingContent) {
-          setIsStreaming(false);
-        }
+        setIsStreaming(false);
       }
     },
-    [currentId, isStreaming, sessions, streamingContent]
+    [currentId, isStreaming, sessions]
   );
+
+  if (checkingAuth) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
+        <div style={{ color: "#6b7280" }}>加载中...</div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <AuthPage onLogin={loadCurrentUser} />;
+  }
 
   return (
     <div className="app-layout">
       <Sidebar
         sessions={Object.values(sessions)}
         currentId={currentId}
+        username={currentUser?.username ?? null}
+        isStreaming={isStreaming}
         onSelect={(id) => {
-          abortRef.current?.abort();
+          // 流式响应时禁止切换（双重保护）
+          if (isStreaming) return;
           setCurrentId(id);
           setStreamingContent("");
-          setIsStreaming(false);
+          setStatus("");
         }}
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
+        onUpdateTitle={handleUpdateTitle}
+        onLogout={handleLogout}
       />
       <ChatWindow
         session={currentSession ?? null}
@@ -247,6 +514,7 @@ export default function App() {
         status={status}
         isStreaming={isStreaming}
         onSend={handleSend}
+        onLoadOlder={loadOlderMessages}
       />
     </div>
   );

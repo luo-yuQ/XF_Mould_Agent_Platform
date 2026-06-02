@@ -91,6 +91,27 @@ services:
     restart: unless-stopped
 
   # ===========================================================================
+  # PostgreSQL（用户认证）
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: mould-postgres
+    environment:
+      POSTGRES_USER: mould
+      POSTGRES_PASSWORD: mould123
+      POSTGRES_DB: mould
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mould -d mould"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================================================
   # 后端 API
   # ===========================================================================
   backend:
@@ -108,12 +129,15 @@ services:
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
       MILVUS_URI: http://milvus:19530
       REDIS_HOST: redis
+      DATABASE_URL: postgresql://mould:mould123@postgres:5432/mould
     volumes:
       - ./papers:/app/papers:ro  # 文档目录，用于首次知识库导入
     depends_on:
       milvus:
         condition: service_healthy
       redis:
+        condition: service_started
+      postgres:
         condition: service_started
     restart: unless-stopped
 
@@ -136,3 +160,4 @@ volumes:
   minio_data:
   milvus_data:
   redis_data:
+  postgres_data:

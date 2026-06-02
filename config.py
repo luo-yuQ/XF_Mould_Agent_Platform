@@ -56,3 +56,18 @@ REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 REDIS_SESSION_TTL = int(os.getenv("REDIS_SESSION_TTL", "86400"))  # 默认 1 天
+
+# =============================================================================
+# PostgreSQL 配置
+# =============================================================================
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://mould:mould123@127.0.0.1:5432/mould"
+)
+
+# =============================================================================
+# JWT 认证配置
+# =============================================================================
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 2

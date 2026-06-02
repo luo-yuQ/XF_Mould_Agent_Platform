@@ -1,12 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 
 interface Props {
-  onSend: (text: string) => void;
+  onSend: (text: string, agentOverride: string) => void;
   disabled: boolean;
 }
 
+const AGENT_OPTIONS = [
+  { value: "", label: "自动" },
+  { value: "rd", label: "研发" },
+  { value: "quality", label: "质量" },
+] as const;
+
 export default function ChatInput({ onSend, disabled }: Props) {
   const [text, setText] = useState("");
+  const [agent, setAgent] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -18,7 +25,7 @@ export default function ChatInput({ onSend, disabled }: Props) {
   const handleSubmit = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
+    onSend(trimmed, agent);
     setText("");
   };
 
@@ -31,6 +38,18 @@ export default function ChatInput({ onSend, disabled }: Props) {
 
   return (
     <div className="chat-input-container">
+      <div className="agent-selector">
+        {AGENT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            className={`agent-option ${agent === opt.value ? "active" : ""}`}
+            onClick={() => setAgent(opt.value)}
+            disabled={disabled}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       <div className="chat-input-wrapper">
         <textarea
           ref={textareaRef}
