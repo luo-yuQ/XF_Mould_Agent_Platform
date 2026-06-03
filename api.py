@@ -25,6 +25,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from state import AgentState
 from graph import build_graph
+from fmea_graph import build_fmea_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 
 
@@ -64,6 +65,20 @@ class AskResponse(BaseModel):
     agent_type: str = ""
     intent: str = ""
     citations: list[Citation] = []
+
+
+class FMEAGenerateRequest(BaseModel):
+    session_id: str
+    product: str
+    process: str
+    failure_phenomenon: str
+    background: str = ""
+
+
+class FMEAGenerateResponse(BaseModel):
+    final_answer: str
+    fmea_rows: list[dict] = []
+    verify_result: dict = {}
 
 
 # =============================================================================
@@ -253,12 +268,20 @@ def get_me(response: Response, user=Depends(get_current_user)):
 # 全局 Graph 实例
 # =============================================================================
 _agent_graph = None
+_fmea_graph = None
 
 def get_agent_graph():
     global _agent_graph
     if _agent_graph is None:
         _agent_graph = build_graph()
     return _agent_graph
+
+
+def get_fmea_graph():
+    global _fmea_graph
+    if _fmea_graph is None:
+        _fmea_graph = build_fmea_graph()
+    return _fmea_graph
 
 
 def _build_state(
@@ -612,6 +635,67 @@ async def _async_update_summary(session_id: str, current_msg_id: int):
         print(f"[Summary] session={session_id[:8]}.. update failed: {e}")
     finally:
         db.close()
+
+
+# ---- FMEA 生成 ----
+@app.post("/quality/fmea/generate", response_model=FMEAGenerateResponse)
+async def generate_fmea(
+    request: FMEAGenerateRequest,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """独立 FMEA 生成接口：不写 ChatMessage，不触发 Memory。"""
+    user = _require_user(user)
+    session = _get_owned_session(db, request.session_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或无权限")
+
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=(
+                    f"产品：{request.product}\n"
+                    f"工序：{request.process}\n"
+                    f"问题现象：{request.failure_phenomenon}\n"
+                    f"背景：{request.background}"
+                ),
+                name="user",
+            )
+        ],
+        "sender": "user",
+        "next_agent": "fmea",
+        "intent": "fmea_generate",
+        "agent_override": "",
+        "rag_result": "",
+        "rag_chunks": [],
+        "citation_map": {},
+        "citation_ids": [],
+        "rag_is_relevant": False,
+        "task_completed": False,
+        "fmea_input_raw": {
+            "product": request.product,
+            "process": request.process,
+            "failure_phenomenon": request.failure_phenomenon,
+            "background": request.background,
+        },
+        "fmea_user_id": user.id,
+        "fmea_session_id": session.id,
+        "fmea_db_session": db,
+    }
+
+    try:
+        final_state = await get_fmea_graph().ainvoke(state, config={"recursion_limit": 20})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"FMEA 生成失败: {exc}") from exc
+
+    messages = final_state.get("messages", [])
+    final_answer = messages[-1].content if messages else final_state.get("fmea_markdown", "")
+
+    return FMEAGenerateResponse(
+        final_answer=final_answer,
+        fmea_rows=final_state.get("fmea_rows", []),
+        verify_result=final_state.get("fmea_verification", {}),
+    )
 
 
 # ---- 提问 ----

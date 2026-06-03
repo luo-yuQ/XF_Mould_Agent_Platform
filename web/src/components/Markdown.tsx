@@ -44,46 +44,28 @@ export default function Markdown({ content, citations }: Props) {
     return `<sup class="citation-ref" title="${escapeHtml(title)}">[${id}]</sup>`;
   });
 
-  // 表格简译：| ... | 转为 HTML 表格
+  // 表格简译：| ... | 转为 HTML 表格（支持多个表格）
   if (result.includes("|")) {
     const lines = result.split("\n");
+    const segments: string[] = [];
     const tableLines: string[] = [];
-    let tableHtml = "";
 
     for (const line of lines) {
       if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
         tableLines.push(line);
       } else {
         if (tableLines.length >= 2) {
-          tableHtml += _renderTable(tableLines);
+          segments.push(_renderTable(tableLines));
+          tableLines.length = 0;
         }
-        tableLines.length = 0;
+        segments.push(line);
       }
     }
     if (tableLines.length >= 2) {
-      tableHtml += _renderTable(tableLines);
+      segments.push(_renderTable(tableLines));
     }
 
-    if (tableHtml) {
-      const firstTableStart = lines.findIndex(
-        (l) => l.trim().startsWith("|") && l.trim().endsWith("|")
-      );
-      const firstTableEnd =
-        lines
-          .slice(firstTableStart)
-          .findIndex(
-            (l, i) =>
-              i > 0 &&
-              !l.trim().startsWith("|") &&
-              !lines[firstTableStart + i + 1]?.trim().startsWith("|")
-          ) + firstTableStart;
-
-      if (firstTableStart >= 0 && firstTableEnd > firstTableStart) {
-        const before = lines.slice(0, firstTableStart).join("\n");
-        const after = lines.slice(firstTableEnd + 1).join("\n");
-        result = before + "\n" + tableHtml + "\n" + after;
-      }
-    }
+    result = segments.join("\n");
   }
 
   // 换行

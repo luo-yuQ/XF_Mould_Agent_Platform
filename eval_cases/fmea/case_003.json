@@ -1,0 +1,21 @@
+{
+  "case_id": "case_003",
+  "input": {
+    "product": "注塑件",
+    "process": "注塑成型",
+    "failure_phenomenon": "短射",
+    "background": "首件检验发现局部填充不足"
+  },
+  "expected_required_fields": [
+    "function",
+    "failure_mode",
+    "effect",
+    "cause",
+    "prevention_control",
+    "detection_control",
+    "recommended_action",
+    "evidence"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true
+}

@@ -1,0 +1,21 @@
+{
+  "case_id": "case_002",
+  "input": {
+    "product": "模具动模组件",
+    "process": "模具装配",
+    "failure_phenomenon": "尺寸超差",
+    "background": "试模后产品关键尺寸偏大"
+  },
+  "expected_required_fields": [
+    "function",
+    "failure_mode",
+    "effect",
+    "cause",
+    "prevention_control",
+    "detection_control",
+    "recommended_action",
+    "evidence"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true
+}

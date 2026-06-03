@@ -4,9 +4,12 @@ import type { Session } from "../types";
 interface Props {
   sessions: Session[];
   currentId: string | null;
+  activeView: "chat" | "fmea";
   username: string | null;
   isStreaming: boolean;
   onSelect: (id: string) => void;
+  onOpenChat: () => void;
+  onOpenFMEA: () => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => Promise<boolean>;
@@ -16,9 +19,12 @@ interface Props {
 export default function Sidebar({
   sessions,
   currentId,
+  activeView,
   username,
   isStreaming,
   onSelect,
+  onOpenChat,
+  onOpenFMEA,
   onNew,
   onDelete,
   onUpdateTitle,
@@ -77,6 +83,24 @@ export default function Sidebar({
       >
         + 新建对话
       </button>
+
+      <div className="sidebar-section sidebar-module-section">
+        <h3 className="sidebar-section-title">XF质量</h3>
+        <button
+          className={`module-entry ${activeView === "chat" ? "active" : ""}`}
+          onClick={onOpenChat}
+          disabled={isStreaming}
+        >
+          质量问答
+        </button>
+        <button
+          className={`module-entry ${activeView === "fmea" ? "active" : ""}`}
+          onClick={onOpenFMEA}
+          disabled={isStreaming}
+        >
+          FMEA生成
+        </button>
+      </div>
 
       <div className="sidebar-section">
         <h3 className="sidebar-section-title">对话历史</h3>

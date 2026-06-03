@@ -99,6 +99,12 @@ body {
   padding: 0 12px;
 }
 
+.sidebar-module-section {
+  flex: 0;
+  overflow: visible;
+  margin-bottom: 12px;
+}
+
 .sidebar-section-title {
   font-size: 12px;
   font-weight: 500;
@@ -119,6 +125,35 @@ body {
   font-size: 13px;
   color: #606080;
   text-align: center;
+}
+
+.module-entry {
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #c8c8e0;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.module-entry:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+  color: #ffffff;
+}
+
+.module-entry.active {
+  background: var(--sidebar-active);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.module-entry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .session-item {
@@ -683,6 +718,160 @@ body {
   cursor: not-allowed;
 }
 
+/* ---- FMEA Generator ---- */
+.fmea-page {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 28px 32px 40px;
+}
+
+.fmea-header,
+.fmea-form,
+.fmea-result,
+.fmea-error {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.fmea-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.fmea-header h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.fmea-header p {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.fmea-form {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.fmea-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fmea-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fmea-field-wide {
+  grid-column: 1 / -1;
+}
+
+.fmea-field span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.fmea-field input,
+.fmea-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.fmea-field textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.fmea-field input:focus,
+.fmea-field textarea:focus {
+  border-color: var(--primary);
+}
+
+.fmea-field input:disabled,
+.fmea-field textarea:disabled {
+  opacity: 0.65;
+}
+
+.fmea-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.fmea-submit {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fmea-submit:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.fmea-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fmea-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.fmea-error {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.fmea-result {
+  margin-top: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+}
+
+.fmea-result-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
 /* ---- Citation 引用样式 ---- */
 .citation-ref {
   font-size: 0.75em;
@@ -850,6 +1039,14 @@ body {
 @media (max-width: 640px) {
   .sidebar {
     display: none;
+  }
+
+  .fmea-page {
+    padding: 20px 12px 28px;
+  }
+
+  .fmea-form-grid {
+    grid-template-columns: 1fr;
   }
 
   .message-row {

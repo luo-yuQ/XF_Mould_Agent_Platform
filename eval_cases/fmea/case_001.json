@@ -1,0 +1,21 @@
+{
+  "case_id": "case_001",
+  "input": {
+    "product": "注塑件外壳",
+    "process": "注塑成型",
+    "failure_phenomenon": "飞边",
+    "background": "客户反馈装配干涉"
+  },
+  "expected_required_fields": [
+    "function",
+    "failure_mode",
+    "effect",
+    "cause",
+    "prevention_control",
+    "detection_control",
+    "recommended_action",
+    "evidence"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true
+}

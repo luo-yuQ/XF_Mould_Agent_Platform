@@ -1,7 +1,7 @@
 """
 XF 模具智能体平台 - 共享状态定义
 """
-from typing import Sequence, TypedDict
+from typing import Any, NotRequired, Sequence, TypedDict
 
 
 class AgentState(TypedDict):
@@ -29,3 +29,19 @@ class AgentState(TypedDict):
 
     # ============ 输出相关 ============
     task_completed: bool  # 任务是否完成
+
+    # ============ FMEA MVP 可选状态 ============
+    fmea_input_raw: NotRequired[dict]
+    fmea_input: NotRequired[dict]
+    fmea_missing_fields: NotRequired[list]
+    fmea_retrieval_queries: NotRequired[list]
+    fmea_rows: NotRequired[list]
+    fmea_verification: NotRequired[dict]
+    fmea_repair_attempted: NotRequired[bool]
+    fmea_markdown: NotRequired[str]
+    fmea_run_id: NotRequired[str]
+    fmea_user_id: NotRequired[int]
+    fmea_session_id: NotRequired[str]
+    fmea_db_session: NotRequired[Any]
+    fmea_error: NotRequired[str]
+    fmea_extra: NotRequired[dict[str, Any]]
