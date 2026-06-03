@@ -1,0 +1,47 @@
+# CLAUDE.md — XF Mould Agent Platform 开发规范
+
+## FMEA Agent MVP 开发约束
+
+### 架构约束
+
+1. **不要重构现有 RAG 问答流程。** 现有 `rd_agent` / `quality_agent` 的 RAG → Writer 链路保持不变，FMEA 生成作为独立分支接入。
+2. **不要修改 Memory 逻辑。** `chat_memory.py` 的滑动窗口、滚动摘要、孤儿清理机制不做任何改动。
+3. **不要修改现有 Milvus 入库逻辑。** `knowledge/ingest.py` 的文档解析、分块、写入流程保持不变。如需新增知识库 collection，在 `config.py` 中加常量，在 `ingest.py` 中加分支，不改已有函数签名。
+4. **FMEA 生成功能作为 XF质量 下的新业务工作流接入。** 路由入口复用 supervisor 的 `next_agent` 机制，新增一个独立的子图（如 `fmea_graph`），不嵌入现有 `rd_rag → rd_writer` 链路。
+
+### 文件改动原则
+
+5. **优先新增文件，少改旧文件。** 新增 agent 放 `agents/fmea_agent.py`，新 graph 放 `graph.py` 中追加节点（或新建 `fmea_graph.py`）。已有文件只做最小侵入式改动（加一个路由分支、加一个状态描述）。
+6. **后端先通过 `mode="fmea"` 或独立接口进入 `fmea_graph`。** 在 `AskRequest` 中新增 `mode` 字段，或在 `agent_override` 中新增 `"fmea"` 值，由 `api.py` 中的分发逻辑决定走现有 graph 还是 fmea_graph。
+
+### FMEA 输出规范
+
+7. **FMEA 输出必须包含结构化 JSON rows 和 Markdown 展示结果。** Writer 输出两部分：① 结构化 JSON（每行一个失效模式，含 S/O/D/AP/RPN 等字段）；② 面向用户的 Markdown 格式表格。前端根据 JSON 渲染交互式表格，Markdown 作为降级展示。
+8. **S/O/D/AP 只能作为建议值，必须标注"需人工确认"。** 模型生成的严重度(S)、发生度(O)、探测度(D)、行动优先级(AP) 评分必须附带 `suggested: true` 标记，前端展示时显眼标注"建议值，需人工确认"。
+9. **不得编造标准条款。** 所有 FMEA 相关标准引用（如 AIAG FMEA 手册、VDA 标准）必须来自 RAG 检索材料。无检索依据时，明确标注"基于通用知识，未查到手册原文"。
+10. **所有 FMEA 输出必须保留依据字段。** 每条失效模式的 S/O/D 评分必须附带 `rationale`（评分依据），引用检索材料的 `[N]` 标记不得丢失。
+
+### Writer 行为约束
+
+11. **Writer 不得改写已校验的 FMEA 表格内容，只能包装展示。** 如果上游节点（如 fmea_generate）已经生成了完整的 FMEA 行数据，Writer 只负责将其格式化为 Markdown，不得修改 S/O/D/AP 数值、不得删除行、不得合并失效模式。
+12. **每一步修改后要说明改了哪些文件。** 在 commit message 或 PR 描述中列出本次改动涉及的全部文件路径，便于 code review。
+
+### 已有文件清单（开发时参考，避免误改）
+
+| 文件 | 用途 | 是否可改 |
+|------|------|----------|
+| `state.py` | AgentState 定义 | 可加字段，不删已有字段 |
+| `graph.py` | LangGraph 工作流 | 可加节点和边，不改已有拓扑 |
+| `api.py` | FastAPI 入口 | 可加路由分支和状态描述，不改已有端点行为 |
+| `config.py` | 全局配置 | 可加常量，不改已有值 |
+| `agents/supervisor.py` | 意图路由 | 可加 `next_agent` 分支和 prompt 条目，不改已有路由逻辑 |
+| `agents/rd_agent.py` | R&D 问答 | **不可改** |
+| `agents/quality_agent.py` | 质量问答 | **不可改** |
+| `agents/chat_agent.py` | 闲聊 | **不可改** |
+| `tools/rag.py` | RAG 检索 | 可加 collection 常量，不改 `retrieve_structured` 签名 |
+| `chat_memory.py` | 记忆管理 | **不可改** |
+| `knowledge/ingest.py` | 文档入库 | 可加分支，不改已有函数 |
+| `models/chat.py` | 数据库模型 | **不可改**（`agent_type` 已是自由文本字段） |
+| `web/src/components/ChatInput.tsx` | Agent 选择器 | 可加选项 |
+| `web/src/components/MessageBubble.tsx` | 消息渲染 | 可加 agentType 标签映射 |
+| `web/src/types/index.ts` | TS 类型定义 | 可加字段 |
