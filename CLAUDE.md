@@ -45,3 +45,22 @@
 | `web/src/components/ChatInput.tsx` | Agent 选择器 | 可加选项 |
 | `web/src/components/MessageBubble.tsx` | 消息渲染 | 可加 agentType 标签映射 |
 | `web/src/types/index.ts` | TS 类型定义 | 可加字段 |
+
+## Audit Agent MVP 开发约束
+
+1. **审核检查 Agent 是 XF质量 下的新业务工作流，与 FMEA生成 Agent 并列。**
+2. **不接 Supervisor / 监管者 Agent。**
+3. **不做自动意图识别。**
+4. **MVP 只支持纯文本输入，不支持 docx/pdf 文件上传。**
+5. **不修改 FMEA Agent 已有逻辑。**
+6. **不修改 Memory 逻辑。**
+7. **不修改 Milvus 入库逻辑。**
+8. **不修改现有 RAG 问答主流程。**
+9. **优先新增文件，少改旧文件。**
+10. **后端新增 `/quality/audit/check` 接口。**
+11. **`audit_check` 负责生成审核发现。**
+12. **`audit_verify` 只是内部质检节点，不要包装成独立业务 Agent。**
+13. **verifier 不通过最多 repair 一次，不允许无限循环。**
+14. **审核输出必须包含：问题、类型、风险说明、输入依据、规范依据、整改建议、是否需人工确认。**
+15. **不得编造标准条款；依据不足时写“需人工确认”。**
+16. **writer 只能包装展示，不得改写已校验的 findings 内容。**

@@ -786,6 +786,7 @@ body {
 }
 
 .fmea-field input,
+.fmea-field select,
 .fmea-field textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -804,11 +805,13 @@ body {
 }
 
 .fmea-field input:focus,
+.fmea-field select:focus,
 .fmea-field textarea:focus {
   border-color: var(--primary);
 }
 
 .fmea-field input:disabled,
+.fmea-field select:disabled,
 .fmea-field textarea:disabled {
   opacity: 0.65;
 }

@@ -1,0 +1,21 @@
+{
+  "input": {
+    "audit_type": "audit_record",
+    "content": "审核对象：注塑车间。发现：部分设备点检表未填写完整；作业指导书版本与现场文件不一致；飞边问题有返工记录，但未见原因分析和纠正措施。整改措施：要求班组加强记录管理。",
+    "focus": "VDA6.4符合性",
+    "background": ""
+  },
+  "expected_required_fields": [
+    "issue",
+    "category",
+    "risk_level",
+    "risk_explanation",
+    "evidence_from_input",
+    "basis",
+    "recommendation",
+    "manual_check_required"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true,
+  "expected_recommendation_not_empty": true
+}

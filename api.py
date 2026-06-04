@@ -26,6 +26,7 @@ from langchain_openai import ChatOpenAI
 from state import AgentState
 from graph import build_graph
 from fmea_graph import build_fmea_graph
+from audit_graph import build_audit_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 
 
@@ -79,6 +80,21 @@ class FMEAGenerateResponse(BaseModel):
     final_answer: str
     fmea_rows: list[dict] = []
     verify_result: dict = {}
+
+
+class AuditCheckRequest(BaseModel):
+    session_id: str
+    audit_type: str
+    content: str
+    focus: str = ""
+    background: str = ""
+
+
+class AuditCheckResponse(BaseModel):
+    final_answer: str
+    findings: list[dict] = []
+    verify_result: dict = {}
+    references: list[dict] = []
 
 
 # =============================================================================
@@ -269,6 +285,7 @@ def get_me(response: Response, user=Depends(get_current_user)):
 # =============================================================================
 _agent_graph = None
 _fmea_graph = None
+_audit_graph = None
 
 def get_agent_graph():
     global _agent_graph
@@ -282,6 +299,13 @@ def get_fmea_graph():
     if _fmea_graph is None:
         _fmea_graph = build_fmea_graph()
     return _fmea_graph
+
+
+def get_audit_graph():
+    global _audit_graph
+    if _audit_graph is None:
+        _audit_graph = build_audit_graph()
+    return _audit_graph
 
 
 def _build_state(
@@ -699,6 +723,73 @@ async def generate_fmea(
 
 
 # ---- 提问 ----
+@app.post("/quality/audit/check", response_model=AuditCheckResponse)
+async def check_audit(
+    request: AuditCheckRequest,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """独立审核检查接口：不写 ChatMessage，不触发 Memory。"""
+    user = _require_user(user)
+    session = _get_owned_session(db, request.session_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或无权限")
+
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=(
+                    f"audit_type: {request.audit_type}\n"
+                    f"content: {request.content}\n"
+                    f"focus: {request.focus}\n"
+                    f"background: {request.background}"
+                ),
+                name="user",
+            )
+        ],
+        "sender": "user",
+        "next_agent": "audit",
+        "intent": "audit_check",
+        "agent_override": "",
+        "rag_result": "",
+        "rag_chunks": [],
+        "citation_map": {},
+        "citation_ids": [],
+        "rag_is_relevant": False,
+        "task_completed": False,
+        "audit_input_raw": {
+            "audit_type": request.audit_type,
+            "content": request.content,
+            "focus": request.focus,
+            "background": request.background,
+        },
+        "audit_user_id": user.id,
+        "audit_session_id": session.id,
+        "audit_db_session": db,
+    }
+
+    try:
+        final_state = await get_audit_graph().ainvoke(state, config={"recursion_limit": 20})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"审核检查失败: {exc}") from exc
+
+    messages = final_state.get("messages", [])
+    final_answer = messages[-1].content if messages else final_state.get("audit_markdown", "")
+    citation_map = final_state.get("citation_map", {})
+    references = [
+        {"id": key, **value}
+        for key, value in citation_map.items()
+        if isinstance(value, dict)
+    ]
+
+    return AuditCheckResponse(
+        final_answer=final_answer,
+        findings=final_state.get("audit_findings", []),
+        verify_result=final_state.get("audit_verification", {}),
+        references=references,
+    )
+
+
 @app.post("/api/ask/stream")
 async def ask_stream(
     request: AskRequest,

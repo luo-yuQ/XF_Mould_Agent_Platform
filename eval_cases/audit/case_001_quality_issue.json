@@ -1,0 +1,21 @@
+{
+  "input": {
+    "audit_type": "quality_issue",
+    "content": "客户反馈注塑件外壳装配干涉，现场发现边缘有飞边。初步判断是注塑成型阶段锁模力不足。当前措施是安排操作员加强外观检查。",
+    "focus": "措施闭环",
+    "background": ""
+  },
+  "expected_required_fields": [
+    "issue",
+    "category",
+    "risk_level",
+    "risk_explanation",
+    "evidence_from_input",
+    "basis",
+    "recommendation",
+    "manual_check_required"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true,
+  "expected_recommendation_not_empty": true
+}

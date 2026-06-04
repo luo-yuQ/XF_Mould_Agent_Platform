@@ -1,0 +1,21 @@
+{
+  "input": {
+    "audit_type": "pfmea",
+    "content": "产品：注塑件外壳；工序：注塑成型；失效模式：飞边；后果：装配干涉；原因：锁模力不足；预防控制：无；探测控制：首件外观检查；建议措施：加强检查。",
+    "focus": "FMEA完整性",
+    "background": ""
+  },
+  "expected_required_fields": [
+    "issue",
+    "category",
+    "risk_level",
+    "risk_explanation",
+    "evidence_from_input",
+    "basis",
+    "recommendation",
+    "manual_check_required"
+  ],
+  "expected_manual_check_notice": true,
+  "expected_no_fabricated_clause": true,
+  "expected_recommendation_not_empty": true
+}
