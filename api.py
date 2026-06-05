@@ -27,6 +27,7 @@ from state import AgentState
 from graph import build_graph
 from fmea_graph import build_fmea_graph
 from audit_graph import build_audit_graph
+from report_graph import build_report_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 
 
@@ -95,6 +96,35 @@ class AuditCheckResponse(BaseModel):
     findings: list[dict] = []
     verify_result: dict = {}
     references: list[dict] = []
+
+
+class ReportSourceItem(BaseModel):
+    id: str
+    title: str
+    summary: str
+    created_at: datetime
+
+
+class ReportSourcesResponse(BaseModel):
+    fmea_runs: list[ReportSourceItem] = []
+    audit_runs: list[ReportSourceItem] = []
+
+
+class ReportGenerateRequest(BaseModel):
+    report_type: str = "quality_issue_report"
+    title: str | None = None
+    fmea_run_id: str | None = None
+    audit_run_id: str | None = None
+    extra_background: str | None = None
+    include_chat_summary: bool = False
+
+
+class ReportGenerateResponse(BaseModel):
+    final_markdown: str
+    report_run_id: str | None = None
+    verify_result: dict = {}
+    references: list[dict] = []
+    manual_check_items: list[str] = []
 
 
 # =============================================================================
@@ -286,6 +316,7 @@ def get_me(response: Response, user=Depends(get_current_user)):
 _agent_graph = None
 _fmea_graph = None
 _audit_graph = None
+_report_graph = None
 
 def get_agent_graph():
     global _agent_graph
@@ -306,6 +337,13 @@ def get_audit_graph():
     if _audit_graph is None:
         _audit_graph = build_audit_graph()
     return _audit_graph
+
+
+def get_report_graph():
+    global _report_graph
+    if _report_graph is None:
+        _report_graph = build_report_graph()
+    return _report_graph
 
 
 def _build_state(
@@ -787,6 +825,186 @@ async def check_audit(
         findings=final_state.get("audit_findings", []),
         verify_result=final_state.get("audit_verification", {}),
         references=references,
+    )
+
+
+def _trim_text(value: str | None, limit: int = 120) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) > limit:
+        return text[:limit] + "..."
+    return text
+
+
+def _fmea_source_item(run) -> ReportSourceItem:
+    rows = []
+    if isinstance(run.output_json, dict):
+        rows = run.output_json.get("rows", []) or []
+    title = f"{run.product} - {run.process}"
+    summary_parts = [
+        f"问题现象：{run.failure_phenomenon}",
+        f"FMEA行数：{len(rows)}",
+    ]
+    return ReportSourceItem(
+        id=str(run.id),
+        title=_trim_text(title, 80),
+        summary=_trim_text("；".join(summary_parts), 180),
+        created_at=run.created_at or datetime.utcnow(),
+    )
+
+
+def _audit_source_item(run) -> ReportSourceItem:
+    findings = []
+    if isinstance(run.findings_json, dict):
+        findings = run.findings_json.get("findings", []) or []
+    first_issue = ""
+    if findings and isinstance(findings[0], dict):
+        first_issue = str(findings[0].get("issue") or "")
+    title_parts = [run.audit_type]
+    if run.focus:
+        title_parts.append(_trim_text(run.focus, 40))
+    summary_parts = [
+        f"审核发现数：{len(findings)}",
+        f"首条问题：{first_issue}" if first_issue else _trim_text(run.content_text, 80),
+    ]
+    return ReportSourceItem(
+        id=str(run.id),
+        title=_trim_text(" - ".join(title_parts), 80),
+        summary=_trim_text("；".join(part for part in summary_parts if part), 180),
+        created_at=run.created_at or datetime.utcnow(),
+    )
+
+
+def _coerce_optional_run_id(value: str | None, field_name: str) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} 必须是数字 ID") from exc
+
+
+def _ensure_owned_report_source_runs(
+    db: Session,
+    user_id: int,
+    fmea_run_id: str | None,
+    audit_run_id: str | None,
+) -> None:
+    from models.audit import AuditRun
+    from models.fmea import FMEARun
+
+    fmea_id = _coerce_optional_run_id(fmea_run_id, "fmea_run_id")
+    audit_id = _coerce_optional_run_id(audit_run_id, "audit_run_id")
+
+    if fmea_id is not None:
+        exists = (
+            db.query(FMEARun.id)
+            .filter(FMEARun.id == fmea_id, FMEARun.user_id == user_id)
+            .first()
+        )
+        if not exists:
+            raise HTTPException(status_code=404, detail="fmea_run_id 不存在或无权限")
+
+    if audit_id is not None:
+        exists = (
+            db.query(AuditRun.id)
+            .filter(AuditRun.id == audit_id, AuditRun.user_id == user_id)
+            .first()
+        )
+        if not exists:
+            raise HTTPException(status_code=404, detail="audit_run_id 不存在或无权限")
+
+
+@app.get("/quality/report/sources", response_model=ReportSourcesResponse)
+def list_report_sources(
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """列出当前用户可选择的 FMEA / Audit 运行结果，不按 session_id 强过滤。"""
+    from models.audit import AuditRun
+    from models.fmea import FMEARun
+
+    user = _require_user(user)
+    fmea_runs = (
+        db.query(FMEARun)
+        .filter(FMEARun.user_id == user.id)
+        .order_by(FMEARun.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    audit_runs = (
+        db.query(AuditRun)
+        .filter(AuditRun.user_id == user.id)
+        .order_by(AuditRun.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return ReportSourcesResponse(
+        fmea_runs=[_fmea_source_item(run) for run in fmea_runs],
+        audit_runs=[_audit_source_item(run) for run in audit_runs],
+    )
+
+
+@app.post("/quality/report/generate", response_model=ReportGenerateResponse)
+async def generate_report(
+    request: ReportGenerateRequest,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """根据用户明确选择的 FMEA / Audit run_id 生成质量问题分析报告。"""
+    user = _require_user(user)
+    if request.report_type != "quality_issue_report":
+        raise HTTPException(status_code=400, detail="report_type 当前只支持 quality_issue_report")
+
+    _ensure_owned_report_source_runs(
+        db=db,
+        user_id=user.id,
+        fmea_run_id=request.fmea_run_id,
+        audit_run_id=request.audit_run_id,
+    )
+
+    state: AgentState = {
+        "messages": [],
+        "sender": "user",
+        "next_agent": "report",
+        "intent": "quality_issue_report",
+        "agent_override": "",
+        "rag_result": "",
+        "rag_chunks": [],
+        "citation_map": {},
+        "citation_ids": [],
+        "rag_is_relevant": False,
+        "task_completed": False,
+        "report_input_raw": {
+            "report_type": request.report_type,
+            "title": request.title,
+            "fmea_run_id": request.fmea_run_id,
+            "audit_run_id": request.audit_run_id,
+            "extra_background": request.extra_background,
+            "include_chat_summary": request.include_chat_summary,
+        },
+        "report_user_id": user.id,
+        "report_db_session": db,
+        "report_include_rag": True,
+    }
+
+    try:
+        final_state = await get_report_graph().ainvoke(state, config={"recursion_limit": 20})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"报告生成失败：{exc}") from exc
+
+    if final_state.get("report_error"):
+        raise HTTPException(status_code=500, detail=final_state.get("report_error"))
+
+    report_result = final_state.get("report_result", {}) or {}
+    return ReportGenerateResponse(
+        final_markdown=report_result.get("final_markdown") or final_state.get("report_markdown", ""),
+        report_run_id=final_state.get("report_run_id"),
+        verify_result=report_result.get("verify_result") or final_state.get("report_verify_result", {}),
+        references=report_result.get("references", []),
+        manual_check_items=report_result.get("manual_check_items", []),
     )
 
 

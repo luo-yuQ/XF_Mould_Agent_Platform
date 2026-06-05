@@ -1,0 +1,32 @@
+{
+  "case_id": "case_005_permission",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "权限校验报告",
+    "fmea_run_id": "9991",
+    "audit_run_id": "9992",
+    "extra_background": "尝试读取其他用户的运行记录。"
+  },
+  "permission_denied": true,
+  "other_user_secret": "OTHER_USER_SECRET_SHOULD_NOT_LEAK",
+  "mock_sources": {
+    "fmea_source": {
+      "status": "not_found",
+      "source_type": "fmea",
+      "run_id": "9991",
+      "message": "未找到对应运行记录，或当前用户无权读取，需人工确认。"
+    },
+    "audit_source": {
+      "status": "not_found",
+      "source_type": "audit",
+      "run_id": "9992",
+      "message": "未找到对应运行记录，或当前用户无权读取，需人工确认。"
+    }
+  },
+  "mock_markdown": "# 权限校验报告\n\n## 问题背景\n尝试读取其他用户的运行记录，系统未提供可读取来源，需人工确认。\n\n## 分析对象与范围\n未能读取指定 FMEA 或 Audit 来源，不展示其他用户数据。\n\n## 参考依据\n未找到可访问的 FMEA / Audit 运行记录，需人工确认。\n\n## FMEA分析摘要\n未提供FMEA分析结果，需人工确认；未提供相关结果，需人工确认。\n\n## 审核发现摘要\n未提供审核检查结果，需人工确认；未提供相关结果，需人工确认。\n\n## 风险判断\n由于来源不可访问，不能形成正式风险判断，需人工确认。\n\n## 改进措施建议\n- 请重新选择当前用户有权限访问的 FMEA 或 Audit 运行记录。\n\n## 需人工确认事项\n- 指定 run_id 不存在或无权限，需人工确认。\n\n## 结论\n系统未泄露其他用户数据，报告无法基于不可访问来源生成正式结论。",
+  "expected": {
+    "reject_or_not_found": true,
+    "no_other_user_data_leak": "OTHER_USER_SECRET_SHOULD_NOT_LEAK",
+    "required_sections": true
+  }
+}

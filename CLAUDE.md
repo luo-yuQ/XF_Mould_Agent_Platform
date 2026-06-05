@@ -64,3 +64,36 @@
 14. **审核输出必须包含：问题、类型、风险说明、输入依据、规范依据、整改建议、是否需人工确认。**
 15. **不得编造标准条款；依据不足时写“需人工确认”。**
 16. **writer 只能包装展示，不得改写已校验的 findings 内容。**
+
+## Report Workflow MVP 开发约束
+
+1. 报告生成是 XF质量 下的新业务工作流，与 FMEA生成、Audit审核并列。
+2. 对外可以叫“报告生成 Agent”，代码层面优先实现为 `report_graph` / `report_workflow`。
+3. MVP 只支持生成 `quality_issue_report` 质量问题分析报告。
+4. MVP 输入以明确的 `fmea_run_id` / `audit_run_id` 为主。
+5. 不允许通过 `session_id` 假设 FMEA、Audit、问答在同一个会话中。
+6. 不做 embedding 相似度匹配。
+7. 不做业务产物向量化。
+8. 不新增 `quality_case_id` 全套案例系统，但可以在 schema / model 中预留可选字段，不能强依赖。
+9. 不修改 FMEA Agent 已有逻辑。
+10. 不修改 Audit Agent 已有逻辑。
+11. 不修改 Memory V1 逻辑。
+12. 不修改 Milvus 入库逻辑。
+13. 不修改现有 RAG 问答主流程。
+14. 不接 Supervisor / 监管者 Agent。
+15. 不做多Agent协作。
+16. 不做文件上传。
+17. 不做 docx/pdf 解析。
+18. 不做 Word / PDF 导出。
+19. 报告输出先用 Markdown。
+20. 报告生成必须引用已选择的 `fmea_run` / `audit_run` 内容。
+21. 报告不得重新编造 FMEA 表或审核发现。
+22. 报告不得编造标准条款；依据不足时写“需人工确认”。
+23. `report_writer` 只能整合、归纳、成文，不得改写已校验的 FMEA / Audit 关键事实。
+24. `report_verifier` 必须检查章节完整性、来源完整性、是否编造依据、结论是否对应前文。
+25. verifier 不通过最多 repair 一次，不允许无限循环。
+26. 后端新增接口：`GET /quality/report/sources` 和 `POST /quality/report/generate`。
+27. `GET /quality/report/sources` 用于给前端列出可选择的 `fmea_runs` / `audit_runs`。
+28. `POST /quality/report/generate` 根据用户选择的 `fmea_run_id` / `audit_run_id` 生成报告。
+29. 新增 `report_runs` 表保存报告产物。
+30. `report_runs` 至少保存 `user_id`、`report_type`、`title`、`fmea_run_id`、`audit_run_id`、`extra_background`、`final_markdown`、`verify_result_json`、`references_json`、`created_at`。

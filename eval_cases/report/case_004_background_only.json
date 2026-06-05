@@ -1,0 +1,32 @@
+{
+  "case_id": "case_004_background_only",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "客户投诉质量问题草稿报告",
+    "fmea_run_id": null,
+    "audit_run_id": null,
+    "extra_background": "客户投诉装配后出现异响，当前仅有问题描述，尚未完成 FMEA 和审核检查。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "missing",
+      "source_type": "fmea",
+      "run_id": null,
+      "message": "未提供 fmea_run_id，需人工确认。"
+    },
+    "audit_source": {
+      "status": "missing",
+      "source_type": "audit",
+      "run_id": null,
+      "message": "未提供 audit_run_id，需人工确认。"
+    }
+  },
+  "mock_markdown": "# 客户投诉质量问题草稿报告\n\n## 问题背景\n客户投诉装配后出现异响，当前仅有问题描述，尚未完成 FMEA 和审核检查，需人工确认。\n\n## 分析对象与范围\n报告仅基于用户补充背景形成草稿，分析对象和范围均需人工确认。\n\n## 参考依据\n仅参考用户补充背景。未检索到充分标准依据，需人工确认。\n\n## FMEA分析摘要\n未提供FMEA分析结果，需人工确认；未提供相关结果，需人工确认。\n\n## 审核发现摘要\n未提供审核检查结果，需人工确认；未提供相关结果，需人工确认。\n\n## 风险判断\n当前证据不足，不能形成正式风险判断，需人工确认。\n\n## 改进措施建议\n- 补充 FMEA 分析结果后再确认失效链条，需人工确认。\n- 补充审核检查结果后再确认整改闭环，需人工确认。\n\n## 需人工确认事项\n- 缺少 FMEA 分析结果，需人工确认。\n- 缺少审核检查结果，需人工确认。\n- 缺少标准依据，需人工确认。\n\n## 结论\n本报告仅为背景信息草稿，不能作为正式质量结论，需人工确认。",
+  "expected": {
+    "required_sections": true,
+    "draft_allowed": true,
+    "manual_check_notice_count_min": 3,
+    "no_specific_sod_ap_values": true,
+    "no_fabricated_clause": true
+  }
+}

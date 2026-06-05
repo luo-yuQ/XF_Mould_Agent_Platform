@@ -15,8 +15,36 @@ export default function Markdown({ content, citations }: Props) {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-  // 清洗 LLM 输出的字面量 <br>，防止在页面上显示为文本
-  let result = escapeHtml(content)
+  const humanizeSource = (raw: string) => {
+    const parts = raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => {
+        const audit = item.match(/^Audit\s+Finding\s+(\d+)$/i);
+        if (audit) return "审核发现";
+
+        const fmea = item.match(/^FMEA\s+(?:Row|Finding)\s+(\d+)$/i);
+        if (fmea) return "FMEA 分析结果";
+
+        const rag = item.match(/^RAG\s+(.+)$/i);
+        if (rag) {
+          const sourceId = rag[1];
+          return sourceId.toLowerCase().includes("vda")
+            ? "VDA6.4 检索依据"
+            : sourceId.toLowerCase().includes("fmea")
+              ? "FMEA 检索依据"
+              : "检索依据";
+        }
+
+        return item;
+      });
+
+    return parts.join("、");
+  };
+
+  // 清洗 LLM 输出的字面量 <br> 和被转义的 Markdown 粗体标记。
+  let result = escapeHtml(content.replace(/\\\*/g, "*"))
     .replace(/&lt;br\s*\/?&gt;/gi, "<br/>");
 
   // 代码块 ```...```
@@ -29,6 +57,13 @@ export default function Markdown({ content, citations }: Props) {
 
   // 粗体 **...**
   result = result.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // 报告来源标记：[来源: Audit Finding 1, RAG vda6.4_table_000534]
+  result = result.replace(/\[来源[:：]\s*([^\]]+)\]/g, (_m, raw) => {
+    const label = humanizeSource(raw);
+    const title = `原始来源：${raw}`;
+    return `<span class="source-ref" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+  });
 
   // 标题 ### ...
   result = result.replace(/^### (.+)$/gm, "<h3>$1</h3>");

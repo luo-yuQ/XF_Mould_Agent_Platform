@@ -1,0 +1,43 @@
+{
+  "case_id": "case_002_only_fmea",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "仅基于 FMEA 的裂纹问题草稿报告",
+    "fmea_run_id": "102",
+    "audit_run_id": null,
+    "extra_background": "内部巡检发现冲压件边缘裂纹。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "found",
+      "source_type": "fmea",
+      "run_id": "102",
+      "product": "冲压件",
+      "process": "翻边",
+      "failure_phenomenon": "边缘裂纹",
+      "output_json": {
+        "rows": [
+          {
+            "failure_mode": "边缘裂纹",
+            "cause": "翻边圆角不足",
+            "recommended_action": "复核翻边圆角和模具状态"
+          }
+        ]
+      },
+      "output_markdown": "PFMEA 已识别翻边边缘裂纹风险。"
+    },
+    "audit_source": {
+      "status": "missing",
+      "source_type": "audit",
+      "run_id": null,
+      "message": "未提供 audit_run_id，需人工确认。"
+    }
+  },
+  "mock_markdown": "# 仅基于 FMEA 的裂纹问题草稿报告\n\n## 问题背景\n内部巡检发现冲压件边缘裂纹。\n\n## 分析对象与范围\n分析对象为冲压件翻边工序，报告仅基于 FMEA 结果和用户背景。\n\n## 参考依据\n参考已选择的 FMEA运行记录 #102。未提供 Audit 结果，需人工确认。\n\n## FMEA分析摘要\nFMEA运行记录 #102 显示，翻边工序存在“边缘裂纹”失效模式，相关原因为翻边圆角不足，建议复核翻边圆角和模具状态。\n\n## 审核发现摘要\n未提供审核检查结果，需人工确认；未提供相关结果，需人工确认。\n\n## 风险判断\n当前只能基于 FMEA 识别过程风险，缺少审核发现支撑，需人工确认。\n\n## 改进措施建议\n- 基于 FMEA运行记录 #102，复核翻边圆角和模具状态。\n\n## 需人工确认事项\n- 未提供审核检查结果，需人工确认。\n- 缺少整改闭环和审核证据，需人工确认。\n\n## 结论\n报告可作为仅基于 FMEA 的草稿，正式结论需补充审核检查结果后确认。",
+  "expected": {
+    "required_sections": true,
+    "audit_missing_notice": "未提供审核检查结果，需人工确认",
+    "no_fabricated_audit_finding": true,
+    "no_fabricated_clause": true
+  }
+}

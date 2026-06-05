@@ -849,6 +849,74 @@ body {
   color: var(--text-secondary);
 }
 
+.report-meta {
+  font-size: 13px;
+}
+
+.report-verify-pass,
+.report-verify-fail {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.report-verify-pass {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.report-verify-fail {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.report-list {
+  margin: 8px 0 0 18px;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.report-refresh {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.report-refresh:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.report-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.report-source-summary {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.report-warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+}
+
 .fmea-error {
   margin-top: 16px;
   padding: 10px 12px;
@@ -890,6 +958,21 @@ body {
 .citation-ref:hover {
   color: var(--primary-hover);
   text-decoration: underline;
+}
+
+.source-ref {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 2px 7px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1.5;
+  vertical-align: baseline;
 }
 
 /* Citations 卡片区域 */

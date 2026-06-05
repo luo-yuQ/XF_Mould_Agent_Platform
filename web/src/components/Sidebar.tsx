@@ -4,13 +4,14 @@ import type { Session } from "../types";
 interface Props {
   sessions: Session[];
   currentId: string | null;
-  activeView: "chat" | "fmea" | "audit";
+  activeView: "chat" | "fmea" | "audit" | "report";
   username: string | null;
   isStreaming: boolean;
   onSelect: (id: string) => void;
   onOpenChat: () => void;
   onOpenFMEA: () => void;
   onOpenAudit: () => void;
+  onOpenReport: () => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => Promise<boolean>;
@@ -27,6 +28,7 @@ export default function Sidebar({
   onOpenChat,
   onOpenFMEA,
   onOpenAudit,
+  onOpenReport,
   onNew,
   onDelete,
   onUpdateTitle,
@@ -108,6 +110,13 @@ export default function Sidebar({
           disabled={isStreaming}
         >
           审核检查
+        </button>
+        <button
+          className={`module-entry ${activeView === "report" ? "active" : ""}`}
+          onClick={onOpenReport}
+          disabled={isStreaming}
+        >
+          报告生成
         </button>
       </div>
 

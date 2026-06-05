@@ -1,0 +1,53 @@
+{
+  "case_id": "case_001_full_sources",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "座椅滑轨冲压裂纹质量问题分析报告",
+    "fmea_run_id": "101",
+    "audit_run_id": "201",
+    "extra_background": "客户反馈座椅滑轨冲压件在拉伸后出现裂纹，涉及最近一批试生产件。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "found",
+      "source_type": "fmea",
+      "run_id": "101",
+      "product": "座椅滑轨冲压件",
+      "process": "拉伸",
+      "failure_phenomenon": "裂纹",
+      "output_json": {
+        "rows": [
+          {
+            "failure_mode": "拉伸裂纹",
+            "cause": "润滑不足，拉伸间隙偏小",
+            "recommended_action": "复核拉伸间隙并增加润滑确认"
+          }
+        ]
+      },
+      "output_markdown": "PFMEA 已识别拉伸裂纹、润滑不足和间隙偏小相关风险。"
+    },
+    "audit_source": {
+      "status": "found",
+      "source_type": "audit",
+      "run_id": "201",
+      "audit_type": "quality_issue",
+      "findings_json": {
+        "findings": [
+          {
+            "issue": "整改措施未说明验证方式",
+            "recommendation": "补充整改验证记录和复发监控要求"
+          }
+        ]
+      },
+      "final_markdown": "审核发现整改验证闭环不足。"
+    }
+  },
+  "mock_markdown": "# 座椅滑轨冲压裂纹质量问题分析报告\n\n## 问题背景\n客户反馈座椅滑轨冲压件在拉伸后出现裂纹，涉及最近一批试生产件。\n\n## 分析对象与范围\n分析对象为座椅滑轨冲压件，范围限定为拉伸工序裂纹问题。\n\n## 参考依据\n参考已选择的 FMEA运行记录 #101、Audit运行记录 #201 和用户补充背景。未检索到充分标准依据，需人工确认。\n\n## FMEA分析摘要\nFMEA运行记录 #101 显示，拉伸工序存在“拉伸裂纹”失效模式，相关原因为润滑不足和拉伸间隙偏小，建议复核拉伸间隙并增加润滑确认。\n\n## 审核发现摘要\nAudit运行记录 #201 显示，审核发现为“整改措施未说明验证方式”，建议补充整改验证记录和复发监控要求。\n\n## 风险判断\n该问题同时涉及过程参数控制和整改闭环不足，后续判断仍需结合现场证据，需人工确认。\n\n## 改进措施建议\n- 基于 FMEA运行记录 #101，复核拉伸间隙并增加润滑确认。\n- 基于 Audit运行记录 #201，补充整改验证记录和复发监控要求。\n\n## 需人工确认事项\n- 标准依据未充分检索，需人工确认。\n- 现场参数和整改证据需人工确认。\n\n## 结论\n现有 FMEA 和 Audit 结果共同指向拉伸过程控制与整改验证闭环需要完善，最终结论需人工确认。",
+  "expected": {
+    "required_sections": true,
+    "fmea_summary_from_fmea_run": "拉伸裂纹",
+    "audit_summary_from_audit_run": "整改措施未说明验证方式",
+    "manual_check_notice": true,
+    "no_fabricated_clause": true
+  }
+}

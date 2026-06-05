@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
 import FMEAGenerator from "./components/FMEAGenerator";
 import AuditCheck from "./components/AuditCheck";
+import ReportGenerator from "./components/ReportGenerator";
 import AuthPage from "./pages/AuthPage";
 
 export default function App() {
@@ -15,7 +16,7 @@ export default function App() {
   const [streamingContent, setStreamingContent] = useState("");
   const [status, setStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeView, setActiveView] = useState<"chat" | "fmea" | "audit">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "fmea" | "audit" | "report">("chat");
   const abortRef = useRef<AbortController | null>(null);
   // LRU 缓存：保留最近 3 个会话的消息
   const LRU_CACHE_SIZE = 3;
@@ -511,6 +512,7 @@ export default function App() {
         onOpenChat={() => setActiveView("chat")}
         onOpenFMEA={() => setActiveView("fmea")}
         onOpenAudit={() => setActiveView("audit")}
+        onOpenReport={() => setActiveView("report")}
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
         onUpdateTitle={handleUpdateTitle}
@@ -520,6 +522,8 @@ export default function App() {
         <FMEAGenerator sessionId={currentId} />
       ) : activeView === "audit" ? (
         <AuditCheck sessionId={currentId} />
+      ) : activeView === "report" ? (
+        <ReportGenerator />
       ) : (
         <ChatWindow
           session={currentSession ?? null}

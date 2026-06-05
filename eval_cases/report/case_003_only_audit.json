@@ -1,0 +1,40 @@
+{
+  "case_id": "case_003_only_audit",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "仅基于审核发现的整改草稿报告",
+    "fmea_run_id": null,
+    "audit_run_id": "203",
+    "extra_background": "客户要求说明整改闭环计划。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "missing",
+      "source_type": "fmea",
+      "run_id": null,
+      "message": "未提供 fmea_run_id，需人工确认。"
+    },
+    "audit_source": {
+      "status": "found",
+      "source_type": "audit",
+      "run_id": "203",
+      "audit_type": "quality_issue",
+      "findings_json": {
+        "findings": [
+          {
+            "issue": "原因分析只描述现象，未识别根因",
+            "recommendation": "补充根因分析和验证证据"
+          }
+        ]
+      },
+      "final_markdown": "审核发现原因分析深度不足。"
+    }
+  },
+  "mock_markdown": "# 仅基于审核发现的整改草稿报告\n\n## 问题背景\n客户要求说明整改闭环计划。\n\n## 分析对象与范围\n报告仅基于 Audit运行记录 #203 和用户补充背景，未包含 FMEA 分析结果。\n\n## 参考依据\n参考已选择的 Audit运行记录 #203。未提供 FMEA 结果，需人工确认。\n\n## FMEA分析摘要\n未提供FMEA分析结果，需人工确认；未提供相关结果，需人工确认。\n\n## 审核发现摘要\nAudit运行记录 #203 显示，审核发现为“原因分析只描述现象，未识别根因”，建议补充根因分析和验证证据。\n\n## 风险判断\n当前缺少 FMEA 风险链条，只能确认审核发现中的原因分析不足，需人工确认。\n\n## 改进措施建议\n- 基于 Audit运行记录 #203，补充根因分析和验证证据。\n\n## 需人工确认事项\n- 未提供FMEA分析结果，需人工确认。\n- 失效模式、原因链和控制措施需人工确认。\n\n## 结论\n报告可作为仅基于审核发现的整改草稿，正式结论需补充 FMEA 分析结果后确认。",
+  "expected": {
+    "required_sections": true,
+    "fmea_missing_notice": "未提供FMEA分析结果，需人工确认",
+    "no_fabricated_fmea": true,
+    "no_fabricated_clause": true
+  }
+}
