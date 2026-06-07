@@ -1,7 +1,6 @@
 """
 会话与消息模型
 """
-from datetime import datetime
 from sqlalchemy import (
     Column,
     Integer,
@@ -15,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from models.base import Base
+from time_utils import utc_now
 
 
 class ChatSession(Base):
@@ -24,8 +24,8 @@ class ChatSession(Base):
     id = Column(String(64), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(200), nullable=False, default="新对话")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     messages = relationship(
         "ChatMessage",
@@ -51,7 +51,7 @@ class ChatMessage(Base):
     agent_type = Column(String(50), nullable=True)
     intent = Column(String(50), nullable=True)
     citations = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
 
     session = relationship("ChatSession", back_populates="messages")
 
@@ -73,4 +73,4 @@ class ChatSessionSummary(Base):
     )
     summary = Column(Text, nullable=False)
     covered_until_msg_id = Column(Integer, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utc_now)

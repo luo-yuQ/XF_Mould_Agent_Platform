@@ -71,6 +71,7 @@ class AgentState(TypedDict):
     report_sources: NotRequired[dict[str, Any]]
     report_fmea_source: NotRequired[dict[str, Any]]
     report_audit_source: NotRequired[dict[str, Any]]
+    report_source_match_result: NotRequired[dict[str, Any]]
     report_rag_queries: NotRequired[list]
     report_rag_refs: NotRequired[list]
     report_context: NotRequired[dict[str, Any]]

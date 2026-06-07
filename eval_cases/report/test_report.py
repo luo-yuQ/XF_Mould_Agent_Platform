@@ -145,6 +145,41 @@ async def run_case(case_path: Path) -> dict:
     markdown = final_state.get("report_markdown", "")
     verify_result = final_state.get("report_verify_result", {})
     sources = final_state.get("report_sources", {})
+    source_match_result = final_state.get("report_source_match_result", {})
+    report_result = final_state.get("report_result", {})
+
+    if expected.get("report_generated") and (
+        not markdown.strip() or final_state.get("report_error")
+    ):
+        errors.append("来源匹配检查阻止了报告生成")
+
+    matched_in = expected.get("source_match_matched_in")
+    if matched_in and source_match_result.get("matched") not in matched_in:
+        errors.append(
+            f"source match={source_match_result.get('matched')}，"
+            f"期望属于 {matched_in}"
+        )
+
+    if (
+        expected.get("common_keywords_non_empty")
+        and not source_match_result.get("common_keywords")
+    ):
+        errors.append("source match 未返回共同关键词")
+
+    manual_required = expected.get("manual_check_required")
+    if (
+        manual_required is not None
+        and source_match_result.get("manual_check_required") is not manual_required
+    ):
+        errors.append(
+            "source match 的 manual_check_required 与期望不一致"
+        )
+
+    if expected.get("source_match_warning_in_manual_items"):
+        warning = source_match_result.get("warning_message", "")
+        manual_items = report_result.get("manual_check_items", [])
+        if not warning or not any(warning in item for item in manual_items):
+            errors.append("报告需人工确认事项未包含来源匹配提醒")
 
     if expected.get("required_sections") and not _has_all_sections(markdown):
         errors.append("报告缺少固定章节")
@@ -208,6 +243,7 @@ async def run_case(case_path: Path) -> dict:
         "case_id": case_id,
         "passed": passed,
         "verify_passed": verify_result.get("passed", False),
+        "source_match": source_match_result.get("matched"),
         "errors": errors,
     }
 
@@ -236,7 +272,11 @@ async def main():
     passed = sum(1 for result in results if result["passed"])
     for result in results:
         status = "PASS" if result["passed"] else "FAIL"
-        print(f"  {result['case_id']}: {status} (verify={result.get('verify_passed')})")
+        print(
+            f"  {result['case_id']}: {status} "
+            f"(verify={result.get('verify_passed')}, "
+            f"source_match={result.get('source_match')})"
+        )
     print(f"\n总计: {passed}/{total} 通过")
 
     if passed != total:

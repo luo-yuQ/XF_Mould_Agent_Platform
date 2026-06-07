@@ -1,0 +1,54 @@
+{
+  "case_id": "case_002_mismatch",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "来源不一致质量问题分析报告",
+    "fmea_run_id": "302",
+    "audit_run_id": "402",
+    "extra_background": "请基于所选来源形成报告并标记风险。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "found",
+      "source_type": "fmea",
+      "run_id": "302",
+      "title": "注塑件外壳飞边",
+      "keywords_json": ["注塑件外壳", "注塑", "飞边"],
+      "output_json": {
+        "rows": [
+          {
+            "failure_mode": "飞边",
+            "effect": "外观不良",
+            "cause": "锁模力不足"
+          }
+        ]
+      }
+    },
+    "audit_source": {
+      "status": "found",
+      "source_type": "audit",
+      "run_id": "402",
+      "title": "体系文件审核",
+      "keywords_json": ["设备点检表缺失", "文件版本不一致"],
+      "findings_json": {
+        "findings": [
+          {
+            "issue": "设备点检表缺失",
+            "category": "文件版本不一致",
+            "recommendation": "补齐点检记录并统一文件版本"
+          }
+        ]
+      }
+    }
+  },
+  "mock_markdown": "# 来源不一致质量问题分析报告\n\n## 问题背景\n所选来源主题可能不一致。\n\n## 分析对象与范围\n同时列示 FMEA 与 Audit 已有事实，不进行自动合并判断。\n\n## 参考依据\nFMEA运行记录 #302、Audit运行记录 #402。\n\n## FMEA分析摘要\nFMEA运行记录 #302 识别注塑件飞边。\n\n## 审核发现摘要\nAudit运行记录 #402 发现设备点检表缺失和文件版本不一致。\n\n## 风险判断\n两类来源需人工确认是否属于同一问题。\n\n## 改进措施建议\n- 分别复核飞边控制和文件管理问题。\n\n## 需人工确认事项\n- 确认所选来源是否属于同一质量问题。\n\n## 结论\n报告保留两类来源，最终结论需人工确认。",
+  "expected": {
+    "required_sections": true,
+    "report_generated": true,
+    "source_match_matched_in": ["no", "uncertain"],
+    "manual_check_required": true,
+    "source_match_warning_in_manual_items": true,
+    "manual_check_notice": true,
+    "no_fabricated_clause": true
+  }
+}

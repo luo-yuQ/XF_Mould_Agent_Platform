@@ -9,6 +9,7 @@ type AuditType = "quality_issue" | "pfmea" | "audit_record" | "general";
 
 interface AuditResponse {
   final_answer: string;
+  audit_run_id: string | null;
   findings: Array<Record<string, unknown>>;
   verify_result: Record<string, unknown>;
   references: Array<Record<string, unknown>>;
@@ -21,12 +22,17 @@ const AUDIT_TYPE_OPTIONS: Array<{ value: AuditType; label: string }> = [
   { value: "general", label: "其他" },
 ];
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function AuditCheck({ sessionId }: Props) {
   const [auditType, setAuditType] = useState<AuditType>("quality_issue");
   const [content, setContent] = useState("");
   const [focus, setFocus] = useState("");
   const [background, setBackground] = useState("");
   const [answer, setAnswer] = useState("");
+  const [auditRunId, setAuditRunId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,6 +45,7 @@ export default function AuditCheck({ sessionId }: Props) {
     setSubmitting(true);
     setError("");
     setAnswer("");
+    setAuditRunId(null);
 
     try {
       const res = await fetch("/quality/audit/check", {
@@ -67,8 +74,9 @@ export default function AuditCheck({ sessionId }: Props) {
 
       const data: AuditResponse = await res.json();
       setAnswer(data.final_answer || "");
-    } catch (err: any) {
-      setError(err.message || "审核检查失败");
+      setAuditRunId(data.audit_run_id || null);
+    } catch (err: unknown) {
+      setError(errorMessage(err, "审核检查失败"));
     } finally {
       setSubmitting(false);
     }
@@ -146,6 +154,11 @@ export default function AuditCheck({ sessionId }: Props) {
       {answer && (
         <div className="fmea-result">
           <div className="fmea-result-title">审核检查结果</div>
+          {auditRunId && (
+            <div className="artifact-run-id">
+              已保存为 Audit 业务产物：<strong>{auditRunId}</strong>
+            </div>
+          )}
           <div className="message-content">
             <Markdown content={answer} citations={[]} />
           </div>

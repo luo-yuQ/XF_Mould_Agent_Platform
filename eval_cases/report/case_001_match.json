@@ -1,0 +1,51 @@
+{
+  "case_id": "case_001_match",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "注塑件外壳飞边质量问题分析报告",
+    "fmea_run_id": "301",
+    "audit_run_id": "401",
+    "extra_background": "注塑件外壳飞边造成装配干涉。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "found",
+      "source_type": "fmea",
+      "run_id": "301",
+      "title": "注塑件外壳 - 飞边",
+      "keywords_json": ["注塑件外壳", "飞边", "装配干涉"],
+      "output_json": {
+        "rows": [
+          {
+            "failure_mode": "飞边",
+            "effect": "装配干涉",
+            "cause": "模具间隙偏大"
+          }
+        ]
+      }
+    },
+    "audit_source": {
+      "status": "found",
+      "source_type": "audit",
+      "run_id": "401",
+      "title": "注塑件外壳飞边审核",
+      "keywords_json": ["注塑件外壳", "飞边", "装配干涉"],
+      "findings_json": {
+        "findings": [
+          {
+            "issue": "飞边导致装配干涉",
+            "recommendation": "复核模具间隙并验证装配"
+          }
+        ]
+      }
+    }
+  },
+  "mock_markdown": "# 注塑件外壳飞边质量问题分析报告\n\n## 问题背景\n注塑件外壳飞边造成装配干涉。\n\n## 分析对象与范围\n注塑件外壳飞边问题。\n\n## 参考依据\nFMEA运行记录 #301、Audit运行记录 #401。\n\n## FMEA分析摘要\nFMEA运行记录 #301 识别飞边及装配干涉风险。\n\n## 审核发现摘要\nAudit运行记录 #401 发现飞边导致装配干涉。\n\n## 风险判断\n现有来源指向同一质量问题。\n\n## 改进措施建议\n- 复核模具间隙并验证装配。\n\n## 需人工确认事项\n- 现场尺寸需人工确认。\n\n## 结论\n报告已基于所选来源生成。",
+  "expected": {
+    "required_sections": true,
+    "report_generated": true,
+    "source_match_matched_in": ["yes", "uncertain"],
+    "common_keywords_non_empty": true,
+    "no_fabricated_clause": true
+  }
+}

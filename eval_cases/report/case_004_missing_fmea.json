@@ -1,0 +1,43 @@
+{
+  "case_id": "case_004_missing_fmea",
+  "input": {
+    "report_type": "quality_issue_report",
+    "title": "仅 Audit 来源报告",
+    "fmea_run_id": null,
+    "audit_run_id": "404",
+    "extra_background": "设备点检记录存在缺失。"
+  },
+  "mock_sources": {
+    "fmea_source": {
+      "status": "missing",
+      "source_type": "fmea",
+      "run_id": null,
+      "message": "未提供 fmea_run_id，需人工确认。"
+    },
+    "audit_source": {
+      "status": "found",
+      "source_type": "audit",
+      "run_id": "404",
+      "keywords_json": ["设备点检表缺失", "文件版本不一致"],
+      "findings_json": {
+        "findings": [
+          {
+            "issue": "设备点检表缺失",
+            "recommendation": "补齐记录并核对文件版本"
+          }
+        ]
+      }
+    }
+  },
+  "mock_markdown": "# 仅 Audit 来源报告\n\n## 问题背景\n设备点检记录存在缺失。\n\n## 分析对象与范围\n报告仅基于 Audit 来源。\n\n## 参考依据\nAudit运行记录 #404。\n\n## FMEA分析摘要\n未提供FMEA分析结果，需人工确认。\n\n## 审核发现摘要\nAudit运行记录 #404 发现设备点检表缺失。\n\n## 风险判断\n缺少 FMEA 来源，风险链条需人工确认。\n\n## 改进措施建议\n- 补齐点检记录并核对文件版本。\n\n## 需人工确认事项\n- 补充 FMEA 分析结果。\n\n## 结论\n报告作为仅 Audit 来源的草稿。",
+  "expected": {
+    "required_sections": true,
+    "report_generated": true,
+    "source_match_matched_in": ["uncertain"],
+    "manual_check_required": true,
+    "source_match_warning_in_manual_items": true,
+    "fmea_missing_notice": "未提供FMEA分析结果，需人工确认",
+    "no_fabricated_fmea": true,
+    "no_fabricated_clause": true
+  }
+}

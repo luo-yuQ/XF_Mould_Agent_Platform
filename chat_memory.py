@@ -8,11 +8,12 @@ Phase 2: 滚动摘要（summary + 未覆盖消息 + current query）
   - LangChain 状态构造（保留在 api.py 的 _build_state 中）
   - DB schema 定义（在 models/chat.py）
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
 from models.chat import ChatMessage, ChatSessionSummary
+from time_utils import utc_now
 
 
 HISTORY_WINDOW = 20
@@ -45,7 +46,7 @@ def cleanup_orphan_user_messages(db: Session, session_id: str) -> int:
     if not session_id:
         return 0
 
-    threshold_time = datetime.utcnow() - ORPHAN_THRESHOLD
+    threshold_time = utc_now() - ORPHAN_THRESHOLD
 
     msgs = (
         db.query(ChatMessage)
@@ -278,7 +279,7 @@ def save_summary(
     if record:
         record.summary = summary_text
         record.covered_until_msg_id = covered_until_msg_id
-        record.updated_at = datetime.utcnow()
+        record.updated_at = utc_now()
     else:
         record = ChatSessionSummary(
             session_id=session_id,

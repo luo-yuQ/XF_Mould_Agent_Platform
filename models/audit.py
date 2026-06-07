@@ -3,11 +3,11 @@
 
 仅记录审核检查运行结果，不参与向量化、Milvus 写入或历史案例召回。
 """
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text
 
 from models.base import Base
+from time_utils import utc_now
 
 
 class AuditRun(Base):
@@ -23,6 +23,11 @@ class AuditRun(Base):
         nullable=False,
         index=True,
     )
+    title = Column(String(200), nullable=True)
+    summary = Column(Text, nullable=True)
+    keywords_json = Column(JSON, nullable=True)
+    artifact_type = Column(String(50), nullable=True)
+    quality_case_id = Column(String(64), nullable=True)
     audit_type = Column(String(50), nullable=False)
     content_text = Column(Text, nullable=False)
     focus = Column(Text, nullable=True)
@@ -32,7 +37,9 @@ class AuditRun(Base):
     findings_json = Column(JSON, nullable=False)
     final_markdown = Column(Text, nullable=False)
     verify_result_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    references_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=True)
 
 
 Index("ix_audit_runs_user_created", AuditRun.user_id, AuditRun.created_at)

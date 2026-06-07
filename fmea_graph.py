@@ -25,8 +25,10 @@ from agents.fmea_agent import (
     normalize_fmea_input,
     render_fmea_markdown,
 )
+from agents.artifact_metadata import build_fmea_metadata
 from schemas.fmea import FMEAInput
 from state import AgentState
+from time_utils import utc_now
 from tools.fmea_retrieval import build_fmea_queries
 from verifiers.fmea_verifier import verify_fmea_output
 
@@ -316,18 +318,48 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
     from models.fmea import FMEARun
 
     fmea_input = _fmea_input_from_state(state)
+    input_json = fmea_input.model_dump()
+    output_json = {"rows": state.get("fmea_rows", [])}
+    output_markdown = state.get("fmea_markdown", "")
+    retrieved_refs_json = state.get("citation_map", {})
+    try:
+        metadata = build_fmea_metadata(
+            input_data=input_json,
+            output_json=output_json,
+            output_markdown=output_markdown,
+            retrieved_refs=retrieved_refs_json,
+        )
+    except Exception:
+        metadata = {
+            "title": "FMEA分析",
+            "summary": "",
+            "keywords_json": [],
+            "artifact_type": "fmea_run",
+            "references_json": [],
+        }
+    now = utc_now()
+    raw_input = state.get("fmea_input_raw", {})
+    quality_case_id = raw_input.get("quality_case_id") if isinstance(raw_input, dict) else None
     run = FMEARun(
         user_id=user_id,
         session_id=session_id,
+        title=metadata.get("title") or "FMEA分析",
+        summary=metadata.get("summary") or "",
+        keywords_json=metadata.get("keywords_json") or [],
+        artifact_type="fmea_run",
+        references_json=metadata.get("references_json") or [],
+        quality_case_id=quality_case_id,
         product=fmea_input.product,
         process=fmea_input.process,
         failure_phenomenon=fmea_input.failure_phenomenon,
-        input_json=fmea_input.model_dump(),
+        input_json=input_json,
         retrieval_queries_json=state.get("fmea_retrieval_queries", []),
-        retrieved_refs_json=state.get("citation_map", {}),
-        output_json={"rows": state.get("fmea_rows", [])},
-        output_markdown=state.get("fmea_markdown", ""),
+        retrieved_refs_json=retrieved_refs_json,
+        output_json=output_json,
+        output_markdown=output_markdown,
         verify_result_json=state.get("fmea_verification", {}),
+        created_at=now,
+        updated_at=now,
     )
 
     try:

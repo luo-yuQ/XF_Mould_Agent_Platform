@@ -1,5 +1,25 @@
 # CLAUDE.md — XF Mould Agent Platform 开发规范
 
+## 业务产物与 4.5 阶段约束
+
+修改 FMEA / Audit / Report / 业务产物记忆前，必须先阅读：
+
+- `docs/BUSINESS_ARTIFACT_CONTRACT.md`
+- `docs/MVP_ROADMAP.md`
+- `docs/TECH_DEBT_AND_NEXT_STEPS.md`
+
+并遵守以下约束：
+
+1. 不要把 `session_id` 当成 `quality_case_id`。
+2. 4.5 阶段不要做 embedding 相似度。
+3. 4.5 阶段不要写 Milvus。
+4. 4.5 阶段不要做业务产物向量化。
+5. 4.5 阶段不要做完整 `quality_cases` 系统。
+6. 4.5 阶段不要做 SFT。
+7. 先统一业务产物元数据，再做向量化记忆。
+8. run 表统一类型字段叫 `artifact_type`，不叫 `source_type`。
+9. `retrieved_refs_json` 和 `references_json` 不要混用。
+
 ## FMEA Agent MVP 开发约束
 
 ### 架构约束

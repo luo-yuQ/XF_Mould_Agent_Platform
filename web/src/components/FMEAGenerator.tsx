@@ -7,8 +7,13 @@ interface Props {
 
 interface FMEAResponse {
   final_answer: string;
+  fmea_run_id: string | null;
   fmea_rows: Array<Record<string, unknown>>;
   verify_result: Record<string, unknown>;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function FMEAGenerator({ sessionId }: Props) {
@@ -17,6 +22,7 @@ export default function FMEAGenerator({ sessionId }: Props) {
   const [failurePhenomenon, setFailurePhenomenon] = useState("");
   const [background, setBackground] = useState("");
   const [answer, setAnswer] = useState("");
+  const [fmeaRunId, setFmeaRunId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,6 +40,7 @@ export default function FMEAGenerator({ sessionId }: Props) {
     setSubmitting(true);
     setError("");
     setAnswer("");
+    setFmeaRunId(null);
 
     try {
       const res = await fetch("/quality/fmea/generate", {
@@ -62,8 +69,9 @@ export default function FMEAGenerator({ sessionId }: Props) {
 
       const data: FMEAResponse = await res.json();
       setAnswer(data.final_answer || "");
-    } catch (err: any) {
-      setError(err.message || "FMEA 生成失败");
+      setFmeaRunId(data.fmea_run_id || null);
+    } catch (err: unknown) {
+      setError(errorMessage(err, "FMEA 生成失败"));
     } finally {
       setSubmitting(false);
     }
@@ -135,6 +143,11 @@ export default function FMEAGenerator({ sessionId }: Props) {
       {answer && (
         <div className="fmea-result">
           <div className="fmea-result-title">生成结果</div>
+          {fmeaRunId && (
+            <div className="artifact-run-id">
+              已保存为 FMEA 业务产物：<strong>{fmeaRunId}</strong>
+            </div>
+          )}
           <div className="message-content">
             <Markdown content={answer} citations={[]} />
           </div>

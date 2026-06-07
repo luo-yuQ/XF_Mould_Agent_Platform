@@ -29,6 +29,7 @@ from fmea_graph import build_fmea_graph
 from audit_graph import build_audit_graph
 from report_graph import build_report_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
+from time_utils import utc_now
 
 
 app = FastAPI(title="XF 模具智能体平台 API")
@@ -75,10 +76,12 @@ class FMEAGenerateRequest(BaseModel):
     process: str
     failure_phenomenon: str
     background: str = ""
+    quality_case_id: str | None = None
 
 
 class FMEAGenerateResponse(BaseModel):
     final_answer: str
+    fmea_run_id: str | None = None
     fmea_rows: list[dict] = []
     verify_result: dict = {}
 
@@ -89,10 +92,12 @@ class AuditCheckRequest(BaseModel):
     content: str
     focus: str = ""
     background: str = ""
+    quality_case_id: str | None = None
 
 
 class AuditCheckResponse(BaseModel):
     final_answer: str
+    audit_run_id: str | None = None
     findings: list[dict] = []
     verify_result: dict = {}
     references: list[dict] = []
@@ -102,7 +107,10 @@ class ReportSourceItem(BaseModel):
     id: str
     title: str
     summary: str
+    keywords_json: list[str] = []
+    artifact_type: str
     created_at: datetime
+    updated_at: datetime
 
 
 class ReportSourcesResponse(BaseModel):
@@ -117,6 +125,7 @@ class ReportGenerateRequest(BaseModel):
     audit_run_id: str | None = None
     extra_background: str | None = None
     include_chat_summary: bool = False
+    quality_case_id: str | None = None
 
 
 class ReportGenerateResponse(BaseModel):
@@ -125,6 +134,7 @@ class ReportGenerateResponse(BaseModel):
     verify_result: dict = {}
     references: list[dict] = []
     manual_check_items: list[str] = []
+    source_match_result: dict = {}
 
 
 # =============================================================================
@@ -161,7 +171,7 @@ def get_password_hash(password: str) -> str:
 # =============================================================================
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    expire = utc_now() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -739,6 +749,7 @@ async def generate_fmea(
             "process": request.process,
             "failure_phenomenon": request.failure_phenomenon,
             "background": request.background,
+            "quality_case_id": request.quality_case_id,
         },
         "fmea_user_id": user.id,
         "fmea_session_id": session.id,
@@ -755,6 +766,7 @@ async def generate_fmea(
 
     return FMEAGenerateResponse(
         final_answer=final_answer,
+        fmea_run_id=final_state.get("fmea_run_id"),
         fmea_rows=final_state.get("fmea_rows", []),
         verify_result=final_state.get("fmea_verification", {}),
     )
@@ -800,6 +812,7 @@ async def check_audit(
             "content": request.content,
             "focus": request.focus,
             "background": request.background,
+            "quality_case_id": request.quality_case_id,
         },
         "audit_user_id": user.id,
         "audit_session_id": session.id,
@@ -822,6 +835,7 @@ async def check_audit(
 
     return AuditCheckResponse(
         final_answer=final_answer,
+        audit_run_id=final_state.get("audit_run_id"),
         findings=final_state.get("audit_findings", []),
         verify_result=final_state.get("audit_verification", {}),
         references=references,
@@ -839,16 +853,22 @@ def _fmea_source_item(run) -> ReportSourceItem:
     rows = []
     if isinstance(run.output_json, dict):
         rows = run.output_json.get("rows", []) or []
-    title = f"{run.product} - {run.process}"
+    fallback_title = f"{run.product} - {run.process}"
     summary_parts = [
         f"问题现象：{run.failure_phenomenon}",
         f"FMEA行数：{len(rows)}",
     ]
+    fallback_summary = "；".join(summary_parts)
+    created_at = run.created_at or utc_now()
+    keywords = run.keywords_json if isinstance(run.keywords_json, list) else []
     return ReportSourceItem(
         id=str(run.id),
-        title=_trim_text(title, 80),
-        summary=_trim_text("；".join(summary_parts), 180),
-        created_at=run.created_at or datetime.utcnow(),
+        title=_trim_text(run.title, 80) or _trim_text(fallback_title, 80),
+        summary=_trim_text(run.summary, 180) or _trim_text(fallback_summary, 180),
+        keywords_json=keywords,
+        artifact_type=run.artifact_type or "fmea_run",
+        created_at=created_at,
+        updated_at=run.updated_at or created_at,
     )
 
 
@@ -859,18 +879,25 @@ def _audit_source_item(run) -> ReportSourceItem:
     first_issue = ""
     if findings and isinstance(findings[0], dict):
         first_issue = str(findings[0].get("issue") or "")
-    title_parts = [run.audit_type]
+    fallback_title_parts = [run.audit_type]
     if run.focus:
-        title_parts.append(_trim_text(run.focus, 40))
+        fallback_title_parts.append(_trim_text(run.focus, 40))
     summary_parts = [
         f"审核发现数：{len(findings)}",
         f"首条问题：{first_issue}" if first_issue else _trim_text(run.content_text, 80),
     ]
+    fallback_title = " - ".join(fallback_title_parts)
+    fallback_summary = "；".join(part for part in summary_parts if part)
+    created_at = run.created_at or utc_now()
+    keywords = run.keywords_json if isinstance(run.keywords_json, list) else []
     return ReportSourceItem(
         id=str(run.id),
-        title=_trim_text(" - ".join(title_parts), 80),
-        summary=_trim_text("；".join(part for part in summary_parts if part), 180),
-        created_at=run.created_at or datetime.utcnow(),
+        title=_trim_text(run.title, 80) or _trim_text(fallback_title, 80),
+        summary=_trim_text(run.summary, 180) or _trim_text(fallback_summary, 180),
+        keywords_json=keywords,
+        artifact_type=run.artifact_type or "audit_run",
+        created_at=created_at,
+        updated_at=run.updated_at or created_at,
     )
 
 
@@ -982,6 +1009,7 @@ async def generate_report(
             "audit_run_id": request.audit_run_id,
             "extra_background": request.extra_background,
             "include_chat_summary": request.include_chat_summary,
+            "quality_case_id": request.quality_case_id,
         },
         "report_user_id": user.id,
         "report_db_session": db,
@@ -1005,6 +1033,7 @@ async def generate_report(
         verify_result=report_result.get("verify_result") or final_state.get("report_verify_result", {}),
         references=report_result.get("references", []),
         manual_check_items=report_result.get("manual_check_items", []),
+        source_match_result=report_result.get("source_match_result", {}),
     )
 
 
@@ -1143,7 +1172,7 @@ async def ask_stream(
                 if local_session:
                     if new_title:
                         local_session.title = new_title
-                    local_session.updated_at = datetime.utcnow()
+                    local_session.updated_at = utc_now()
                 local_db.commit()
                 assistant_persisted = True
             except Exception:

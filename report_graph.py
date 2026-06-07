@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from datetime import datetime
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
@@ -17,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agents.report_agent import (
     build_report_context,
+    ensure_source_match_warning,
     generate_report_markdown,
     load_report_skill,
     load_report_sources,
@@ -24,8 +24,11 @@ from agents.report_agent import (
     repair_report_once,
     verify_report,
 )
+from agents.artifact_metadata import build_report_metadata
+from agents.report_source_matcher import check_report_source_match
 from schemas.report import ReportInput
 from state import AgentState
+from time_utils import utc_now
 
 
 def _report_input_payload(state: AgentState) -> dict[str, Any]:
@@ -232,6 +235,22 @@ async def report_load_sources_node(state: AgentState) -> AgentState:
     }
 
 
+async def report_source_match_node(state: AgentState) -> AgentState:
+    """Run a non-blocking rule check for the user-selected FMEA and Audit sources."""
+    report_input = _report_input_from_state(state)
+    match_result = check_report_source_match(
+        fmea_run=state.get("report_fmea_source"),
+        audit_run=state.get("report_audit_source"),
+        extra_background=report_input.extra_background,
+    )
+    return {
+        **state,
+        "sender": "report_source_match",
+        "report_source_match_result": match_result,
+        "task_completed": False,
+    }
+
+
 async def report_optional_rag_retrieve_node(state: AgentState) -> AgentState:
     """可选 RAG 检索，只补充参考依据，不替代 FMEA / Audit 结果。"""
     include_rag = state.get("report_include_rag", True)
@@ -298,6 +317,7 @@ async def report_context_builder_node(state: AgentState) -> AgentState:
         fmea_source=state.get("report_fmea_source", {}),
         audit_source=state.get("report_audit_source", {}),
         optional_rag_refs=state.get("report_rag_refs", []),
+        source_match_result=state.get("report_source_match_result", {}),
     )
     return {
         **state,
@@ -314,6 +334,10 @@ async def report_writer_node(state: AgentState) -> AgentState:
     markdown = await generate_report_markdown(
         report_context=report_context,
         skill_text=load_report_skill(),
+    )
+    markdown = ensure_source_match_warning(
+        markdown,
+        state.get("report_source_match_result"),
     )
     return {
         **state,
@@ -345,6 +369,10 @@ async def report_repair_once_node(state: AgentState) -> AgentState:
         verify_result=state.get("report_verify_result", {}),
         skill_text=load_report_skill(),
     )
+    markdown = ensure_source_match_warning(
+        markdown,
+        state.get("report_source_match_result"),
+    )
     return {
         **state,
         "sender": "report_repair_once",
@@ -363,6 +391,10 @@ async def save_report_run_node(state: AgentState) -> AgentState:
     verify_result = state.get("report_verify_result", {})
     references = report_context.get("references", [])
     source_snapshot = state.get("report_source_snapshot", {})
+    source_match_result = (
+        state.get("report_source_match_result")
+        or check_report_source_match(None, None)
+    )
 
     result = render_report_result(
         final_markdown=state.get("report_markdown", ""),
@@ -370,6 +402,7 @@ async def save_report_run_node(state: AgentState) -> AgentState:
         references=references,
         source_snapshot=source_snapshot,
     )
+    result["source_match_result"] = source_match_result
 
     if not db or not user_id:
         return {
@@ -381,20 +414,37 @@ async def save_report_run_node(state: AgentState) -> AgentState:
 
     from models.report import ReportRun
 
+    try:
+        metadata = build_report_metadata(
+            report_input=report_input,
+            final_markdown=state.get("report_markdown", ""),
+            source_snapshot=source_snapshot,
+        )
+    except Exception:
+        metadata = {
+            "summary": "",
+            "keywords_json": [],
+            "artifact_type": "report_run",
+        }
+    now = utc_now()
     run = ReportRun(
         user_id=user_id,
         report_type=report_input.report_type,
         title=report_input.title or report_context.get("title") or "质量问题分析报告",
+        summary=metadata.get("summary") or "",
+        keywords_json=metadata.get("keywords_json") or [],
+        artifact_type="report_run",
         fmea_run_id=_coerce_int(report_input.fmea_run_id),
         audit_run_id=_coerce_int(report_input.audit_run_id),
         quality_case_id=report_input.quality_case_id,
         extra_background=report_input.extra_background,
         source_snapshot_json=_json_ready(source_snapshot),
+        source_match_result_json=_json_ready(source_match_result),
         final_markdown=state.get("report_markdown", ""),
         verify_result_json=_json_ready(verify_result),
         references_json=_json_ready(references),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=now,
+        updated_at=now,
     )
 
     try:
@@ -458,6 +508,7 @@ def build_report_graph():
 
     workflow.add_node("report_intake", report_intake_node)
     workflow.add_node("report_load_sources", report_load_sources_node)
+    workflow.add_node("report_source_match", report_source_match_node)
     workflow.add_node("report_optional_rag_retrieve", report_optional_rag_retrieve_node)
     workflow.add_node("report_context_builder", report_context_builder_node)
     workflow.add_node("report_writer", report_writer_node)
@@ -475,7 +526,8 @@ def build_report_graph():
             "final_response": "final_response",
         },
     )
-    workflow.add_edge("report_load_sources", "report_optional_rag_retrieve")
+    workflow.add_edge("report_load_sources", "report_source_match")
+    workflow.add_edge("report_source_match", "report_optional_rag_retrieve")
     workflow.add_edge("report_optional_rag_retrieve", "report_context_builder")
     workflow.add_edge("report_context_builder", "report_writer")
     workflow.add_edge("report_writer", "report_verify")

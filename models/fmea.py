@@ -3,11 +3,11 @@ FMEA 生成运行记录模型。
 
 仅记录 PFMEA/FMEA 生成结果，不参与向量化、Milvus 写入或历史案例召回。
 """
-from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text
 
 from models.base import Base
+from time_utils import utc_now
 
 
 class FMEARun(Base):
@@ -23,6 +23,11 @@ class FMEARun(Base):
         nullable=False,
         index=True,
     )
+    title = Column(String(200), nullable=True)
+    summary = Column(Text, nullable=True)
+    keywords_json = Column(JSON, nullable=True)
+    artifact_type = Column(String(50), nullable=True)
+    quality_case_id = Column(String(64), nullable=True)
     product = Column(String(200), nullable=False)
     process = Column(String(100), nullable=False)
     failure_phenomenon = Column(String(200), nullable=False)
@@ -32,7 +37,9 @@ class FMEARun(Base):
     output_json = Column(JSON, nullable=False)
     output_markdown = Column(Text, nullable=False)
     verify_result_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    references_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=True)
 
 
 Index("ix_fmea_runs_user_created", FMEARun.user_id, FMEARun.created_at)

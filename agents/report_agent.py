@@ -144,6 +144,10 @@ def _serialize_fmea_run(run: FMEARun) -> dict[str, Any]:
         "source_type": "fmea",
         "run_id": str(run.id),
         "user_id": run.user_id,
+        "title": run.title,
+        "summary": run.summary,
+        "keywords_json": run.keywords_json,
+        "artifact_type": run.artifact_type or "fmea_run",
         "product": run.product,
         "process": run.process,
         "failure_phenomenon": run.failure_phenomenon,
@@ -164,6 +168,10 @@ def _serialize_audit_run(run: AuditRun) -> dict[str, Any]:
         "source_type": "audit",
         "run_id": str(run.id),
         "user_id": run.user_id,
+        "title": run.title,
+        "summary": run.summary,
+        "keywords_json": run.keywords_json,
+        "artifact_type": run.artifact_type or "audit_run",
         "audit_type": run.audit_type,
         "content_text": run.content_text,
         "focus": run.focus,
@@ -270,6 +278,7 @@ def build_report_context(
     fmea_source: dict[str, Any],
     audit_source: dict[str, Any],
     optional_rag_refs: list[dict[str, Any]] | None = None,
+    source_match_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     将 FMEA、Audit、用户补充背景和可选 RAG 引用组织为报告上下文。
@@ -296,6 +305,7 @@ def build_report_context(
         "fmea_source": fmea_source,
         "audit_source": audit_source,
         "optional_rag_refs": rag_refs,
+        "source_match_result": source_match_result or {},
     }
 
     missing_sources: list[str] = []
@@ -314,6 +324,7 @@ def build_report_context(
         "extra_background": normalized_input.extra_background or "",
         "references": references,
         "source_snapshot": source_snapshot,
+        "source_match_result": source_match_result or {},
         "missing_sources": missing_sources,
     }
 
@@ -344,6 +355,9 @@ def _build_generation_prompt(report_context: dict[str, Any], skill_text: str) ->
 【可选 RAG 参考依据】
 {_dump_json(report_context.get("optional_rag_refs", []), max_len=10000)}
 
+【FMEA / Audit 来源匹配提示】
+{_dump_json(report_context.get("source_match_result", {}), max_len=4000)}
+
 【硬性要求】
 1. 只能整合已有 FMEA、Audit、RAG 和用户补充背景。
 2. 不得重新生成 FMEA 表，不得新增失效模式、S/O/D/AP、RPN 或控制措施。
@@ -351,7 +365,9 @@ def _build_generation_prompt(report_context: dict[str, Any], skill_text: str) ->
 4. 不得编造标准条款、页码、章节编号、责任人、日期或具体数值。
 5. FMEA 或 Audit 缺失时，对应章节写“未提供相关结果，需人工确认”。
 6. 所有建议必须能追溯到 FMEA、Audit、用户输入或检索依据之一。
-7. 只输出 Markdown，不要输出 JSON，不要包裹代码块。
+7. 如果来源匹配结果 manual_check_required=true，必须在“需人工确认事项”章节写入 warning_message。
+8. 来源匹配仅是规则提示，不得据此替换用户选择的 FMEA / Audit 来源。
+9. 只输出 Markdown，不要输出 JSON，不要包裹代码块。
 """
 
 
@@ -610,6 +626,44 @@ def _manual_check_items_from(markdown: str, verify_result: dict[str, Any]) -> li
         if "需人工确认" in issue and issue not in items:
             items.append(issue)
     return items
+
+
+def ensure_source_match_warning(
+    markdown: str,
+    source_match_result: dict[str, Any] | None,
+) -> str:
+    """Ensure a required source-match reminder is present in the manual-check section."""
+    result = source_match_result or {}
+    if not result.get("manual_check_required"):
+        return markdown
+    warning = str(result.get("warning_message") or "").strip()
+    if not warning or warning in markdown:
+        return markdown
+
+    heading_pattern = re.compile(
+        r"^(#{1,3})\s*(?:\d+[.、]\s*)?需人工确认事项\s*$",
+        re.MULTILINE,
+    )
+    heading_match = heading_pattern.search(markdown or "")
+    reminder = f"- {warning}"
+    if not heading_match:
+        suffix = "\n\n" if markdown and not markdown.endswith("\n") else "\n"
+        return f"{markdown}{suffix}## 需人工确认事项\n\n{reminder}".strip()
+
+    next_heading = re.search(
+        r"^#{1,3}\s+.+$",
+        markdown[heading_match.end():],
+        re.MULTILINE,
+    )
+    insert_at = (
+        heading_match.end() + next_heading.start()
+        if next_heading
+        else len(markdown)
+    )
+    before = markdown[:insert_at].rstrip()
+    after = markdown[insert_at:].lstrip("\n")
+    separator = "\n\n" if after else ""
+    return f"{before}\n\n{reminder}{separator}{after}"
 
 
 def render_report_result(

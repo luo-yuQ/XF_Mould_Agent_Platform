@@ -25,8 +25,10 @@ from agents.audit_agent import (
     normalize_audit_input,
     render_audit_markdown,
 )
+from agents.artifact_metadata import build_audit_metadata
 from schemas.audit import AuditInput
 from state import AgentState
+from time_utils import utc_now
 from tools.audit_retrieval import build_audit_queries
 from verifiers.audit_verifier import verify_audit_output
 
@@ -329,18 +331,48 @@ async def save_audit_run_node(state: AgentState) -> AgentState:
     from models.audit import AuditRun
 
     audit_input = _audit_input_from_state(state)
+    input_json = audit_input.model_dump()
+    findings_json = {"findings": state.get("audit_findings", [])}
+    final_markdown = state.get("audit_markdown", "")
+    retrieved_refs_json = state.get("citation_map", {})
+    try:
+        metadata = build_audit_metadata(
+            input_data=input_json,
+            findings_json=findings_json,
+            final_markdown=final_markdown,
+            retrieved_refs=retrieved_refs_json,
+        )
+    except Exception:
+        metadata = {
+            "title": "审核检查",
+            "summary": "",
+            "keywords_json": [],
+            "artifact_type": "audit_run",
+            "references_json": [],
+        }
+    now = utc_now()
+    raw_input = state.get("audit_input_raw", {})
+    quality_case_id = raw_input.get("quality_case_id") if isinstance(raw_input, dict) else None
     run = AuditRun(
         user_id=user_id,
         session_id=session_id,
+        title=metadata.get("title") or "审核检查",
+        summary=metadata.get("summary") or "",
+        keywords_json=metadata.get("keywords_json") or [],
+        artifact_type="audit_run",
+        references_json=metadata.get("references_json") or [],
+        quality_case_id=quality_case_id,
         audit_type=audit_input.audit_type,
         content_text=audit_input.content,
         focus=audit_input.focus,
         background=audit_input.background,
         retrieval_queries_json=state.get("audit_retrieval_queries", []),
-        retrieved_refs_json=state.get("citation_map", {}),
-        findings_json={"findings": state.get("audit_findings", [])},
-        final_markdown=state.get("audit_markdown", ""),
+        retrieved_refs_json=retrieved_refs_json,
+        findings_json=findings_json,
+        final_markdown=final_markdown,
         verify_result_json=state.get("audit_verification", {}),
+        created_at=now,
+        updated_at=now,
     )
 
     try:
