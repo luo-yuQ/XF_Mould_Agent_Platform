@@ -53,6 +53,7 @@ for module_name, original_module in graph_modules.items():
 from models.audit import AuditRun
 from models.base import Base
 from models.chat import ChatSession
+from models.artifact_version import BusinessArtifactVersion
 from models.fmea import FMEARun
 from models.report import ReportRun
 from models.user import User
@@ -161,10 +162,55 @@ class ArtifactRunIdApiContractTests(unittest.IsolatedAsyncioTestCase):
             response = await api.generate_fmea(request, user=self.user, db=self.db)
 
         self.assertIsNotNone(response.fmea_run_id)
+        self.assertEqual(response.artifact_id, response.fmea_run_id)
+        self.assertIsNotNone(response.current_version_id)
+        self.assertEqual(response.current_version_no, 1)
         run = self.db.get(FMEARun, int(response.fmea_run_id))
         self.assertIsNotNone(run)
         self.assertEqual(run.user_id, self.user.id)
         self.assertEqual(run.artifact_type, "fmea_run")
+        version = self.db.get(BusinessArtifactVersion, response.current_version_id)
+        self.assertIsNotNone(version)
+        self.assertEqual(version.artifact_id, run.id)
+        self.assertEqual(version.version_no, 1)
+        self.assertEqual(version.operation_type, "create")
+        self.assertIsNone(version.parent_version_id)
+        self.assertEqual(version.input_snapshot_json, run.input_json)
+        self.assertEqual(version.output_json, run.output_json)
+        self.assertEqual(version.final_markdown, run.output_markdown)
+        self.assertEqual(version.references_json, run.references_json)
+        self.assertEqual(version.verify_result_json, run.verify_result_json)
+
+        history = api.get_session_artifacts(
+            self.session.id,
+            artifact_type="fmea",
+            limit=20,
+            offset=0,
+            user=self.user,
+            db=self.db,
+        )
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0].artifact_id, response.artifact_id)
+        self.assertEqual(history[0].latest_version_id, response.current_version_id)
+        self.assertEqual(history[0].latest_version_no, 1)
+
+        versions = api.get_artifact_versions(
+            response.artifact_id,
+            artifact_type=None,
+            user=self.user,
+            db=self.db,
+        )
+        self.assertEqual(versions.artifact_type, "fmea")
+        self.assertEqual([item.version_no for item in versions.versions], [1])
+
+        detail = api.get_artifact_version_detail(
+            response.artifact_id,
+            response.current_version_id,
+            artifact_type=None,
+            user=self.user,
+            db=self.db,
+        )
+        self.assertEqual(detail.final_markdown, run.output_markdown)
 
     async def test_audit_response_run_id_can_query_persisted_record(self):
         request = api.AuditCheckRequest(

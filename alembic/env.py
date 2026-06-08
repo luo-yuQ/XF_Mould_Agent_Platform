@@ -8,8 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.base import Base
-import models.user  # noqa: F401
-import models.chat  # noqa: F401
+import models  # noqa: F401
 from config import DATABASE_URL
 
 config = context.config

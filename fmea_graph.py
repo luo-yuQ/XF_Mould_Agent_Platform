@@ -364,6 +364,13 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
 
     try:
         db.add(run)
+        if callable(getattr(db, "flush", None)) and callable(getattr(db, "query", None)):
+            from services.artifact_revision_service import create_initial_fmea_version
+
+            db.flush()
+            initial_version = create_initial_fmea_version(db, run)
+        else:
+            initial_version = None
         db.commit()
         db.refresh(run)
     except Exception as exc:
@@ -379,6 +386,8 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
         **state,
         "sender": "save_fmea_run",
         "fmea_run_id": str(run.id),
+        "fmea_current_version_id": initial_version.id if initial_version else None,
+        "fmea_current_version_no": initial_version.version_no if initial_version else None,
         "task_completed": True,
     }
 

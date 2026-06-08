@@ -1029,6 +1029,131 @@ body {
   margin-bottom: 10px;
 }
 
+.fmea-result-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.fmea-result-heading .fmea-result-title {
+  margin-bottom: 4px;
+}
+
+.artifact-version-time {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.artifact-version-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.artifact-version-list button {
+  min-width: 40px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.artifact-version-list button.active {
+  border-color: var(--primary);
+  background: #eef2ff;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.artifact-version-list button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.artifact-diff-summary {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.artifact-diff-summary ul {
+  margin: 8px 0 0 18px;
+  line-height: 1.7;
+}
+
+.artifact-revision-form {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.artifact-history {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.artifact-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.artifact-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.artifact-history-list button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.artifact-history-list button:hover:not(:disabled),
+.artifact-history-list button.active {
+  border-color: var(--primary);
+  background: #f5f7ff;
+}
+
+.artifact-history-list button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.artifact-history-list span,
+.artifact-history-list small,
+.artifact-history-empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.artifact-history-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- Citation 引用样式 ---- */
 .citation-ref {
   font-size: 0.75em;

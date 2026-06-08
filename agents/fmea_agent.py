@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 from schemas.fmea import APScore, FMEAInput, FMEARow, ScoreWithRationale
+from time_utils import format_china_time
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -312,13 +312,13 @@ def render_fmea_markdown(fmea_input: FMEAInput, rows: list[FMEARow]) -> str:
 
     本函数只做格式化展示，不改写 row 内容、评分或 RPN。
     """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = format_china_time()
     lines = [
         "# PFMEA 分析报告",
         "",
         f"- **分析对象：** {_md_cell(fmea_input.product)}",
         f"- **目标工序：** {_md_cell(fmea_input.process)}",
-        f"- **生成时间：** {timestamp}",
+        f"- **生成时间：** {timestamp}（北京时间）",
         "- **生成方式：** AI 辅助生成，评分为建议值，需人工确认",
         "",
         "## 失效模式分析",

@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Response, status, Request
+from fastapi import FastAPI, HTTPException, Depends, Query, Response, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
@@ -29,6 +29,19 @@ from fmea_graph import build_fmea_graph
 from audit_graph import build_audit_graph
 from report_graph import build_report_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
+from schemas.artifact_revision import (
+    ArtifactListItem,
+    ArtifactRevisionInput,
+    ArtifactVersionOutput,
+    ArtifactVersionsOutput,
+)
+from services.artifact_revision_service import (
+    ArtifactRevisionError,
+    get_artifact_version,
+    list_artifact_versions,
+    list_session_artifacts,
+    revise_artifact_version,
+)
 from time_utils import utc_now
 
 
@@ -82,6 +95,9 @@ class FMEAGenerateRequest(BaseModel):
 class FMEAGenerateResponse(BaseModel):
     final_answer: str
     fmea_run_id: str | None = None
+    artifact_id: str | None = None
+    current_version_id: str | None = None
+    current_version_no: int | None = None
     fmea_rows: list[dict] = []
     verify_result: dict = {}
 
@@ -150,6 +166,20 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def _artifact_revision_http_error(exc: ArtifactRevisionError) -> HTTPException:
+    status_by_code = {
+        "artifact_not_found": status.HTTP_404_NOT_FOUND,
+        "invalid_base_version": status.HTTP_404_NOT_FOUND,
+        "feature_reserved": status.HTTP_501_NOT_IMPLEMENTED,
+        "version_conflict": status.HTTP_409_CONFLICT,
+        "revision_verify_failed": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    }
+    return HTTPException(
+        status_code=status_by_code.get(exc.code, status.HTTP_400_BAD_REQUEST),
+        detail={"code": exc.code, "message": exc.message},
+    )
 
 
 # =============================================================================
@@ -767,9 +797,109 @@ async def generate_fmea(
     return FMEAGenerateResponse(
         final_answer=final_answer,
         fmea_run_id=final_state.get("fmea_run_id"),
+        artifact_id=final_state.get("fmea_run_id"),
+        current_version_id=final_state.get("fmea_current_version_id"),
+        current_version_no=final_state.get("fmea_current_version_no"),
         fmea_rows=final_state.get("fmea_rows", []),
         verify_result=final_state.get("fmea_verification", {}),
     )
+
+
+# ---- 业务产物版本与追改 ----
+@app.get(
+    "/quality/sessions/{session_id}/artifacts",
+    response_model=list[ArtifactListItem],
+)
+def get_session_artifacts(
+    session_id: str,
+    artifact_type: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _require_user(user)
+    try:
+        return list_session_artifacts(
+            db,
+            session_id=session_id,
+            artifact_type=artifact_type,
+            limit=limit,
+            offset=offset,
+            created_by=user.id,
+        )
+    except ArtifactRevisionError as exc:
+        raise _artifact_revision_http_error(exc) from exc
+
+
+@app.post(
+    "/quality/artifacts/{artifact_id}/revise",
+    response_model=ArtifactVersionOutput,
+)
+async def revise_artifact(
+    artifact_id: str,
+    request: ArtifactRevisionInput,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _require_user(user)
+    try:
+        return await revise_artifact_version(
+            db,
+            artifact_id=artifact_id,
+            artifact_type=request.artifact_type,
+            base_version_id=request.base_version_id,
+            revision_instruction=request.revision_instruction,
+            created_by=user.id,
+        )
+    except ArtifactRevisionError as exc:
+        raise _artifact_revision_http_error(exc) from exc
+
+
+@app.get(
+    "/quality/artifacts/{artifact_id}/versions",
+    response_model=ArtifactVersionsOutput,
+)
+def get_artifact_versions(
+    artifact_id: str,
+    artifact_type: str | None = None,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _require_user(user)
+    try:
+        return list_artifact_versions(
+            db,
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            created_by=user.id,
+        )
+    except ArtifactRevisionError as exc:
+        raise _artifact_revision_http_error(exc) from exc
+
+
+@app.get(
+    "/quality/artifacts/{artifact_id}/versions/{version_id}",
+    response_model=ArtifactVersionOutput,
+)
+def get_artifact_version_detail(
+    artifact_id: str,
+    version_id: str,
+    artifact_type: str | None = None,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _require_user(user)
+    try:
+        return get_artifact_version(
+            db,
+            artifact_id=artifact_id,
+            version_id=version_id,
+            artifact_type=artifact_type,
+            created_by=user.id,
+        )
+    except ArtifactRevisionError as exc:
+        raise _artifact_revision_http_error(exc) from exc
 
 
 # ---- 提问 ----

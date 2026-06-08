@@ -1,12 +1,12 @@
 import unittest
-from datetime import timezone
+from datetime import datetime, timezone
 
 from models.audit import AuditRun
 from models.chat import ChatMessage, ChatSession, ChatSessionSummary
 from models.fmea import FMEARun
 from models.report import ReportRun
 from models.user import User
-from time_utils import utc_now
+from time_utils import format_china_time, utc_now
 
 
 class TimezoneContractTests(unittest.TestCase):
@@ -15,6 +15,10 @@ class TimezoneContractTests(unittest.TestCase):
 
         self.assertIsNotNone(value.tzinfo)
         self.assertEqual(value.utcoffset(), timezone.utc.utcoffset(value))
+
+    def test_server_rendered_china_time_is_utc_plus_eight(self):
+        value = datetime(2026, 6, 8, 5, 38, 46, tzinfo=timezone.utc)
+        self.assertEqual(format_china_time(value), "2026-06-08 13:38:46")
 
     def test_persisted_timestamp_columns_are_timezone_aware(self):
         timestamp_columns = (

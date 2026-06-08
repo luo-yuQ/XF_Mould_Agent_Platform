@@ -5,11 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      "/api": {
+    proxy: Object.fromEntries(
+      ["/api", "/auth", "/chat", "/quality"].map((path) => [
+        path,
+        {
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
-      },
-    },
+        },
+      ]),
+    ),
   },
 });
