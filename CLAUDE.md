@@ -20,6 +20,32 @@
 8. run 表统一类型字段叫 `artifact_type`，不叫 `source_type`。
 9. `retrieved_refs_json` 和 `references_json` 不要混用。
 
+## 4.6 业务产物追改与版本记录 MVP 开发约束
+
+1. 4.6 是业务产物追改与版本记录，不是自动意图识别。
+2. 用户必须在具体业务产物详情页下方输入修改要求。
+3. 后端必须基于 `artifact_id`、`artifact_type`、`base_version_id` 执行追改。
+4. 不允许覆盖旧版本，每次追改必须生成新版本。
+5. 新版本必须保存 `parent_version_id`。
+6. 优先修改结构化 `output_json`，不直接让 LLM 改 Markdown。
+7. `final_markdown` 只是展示层渲染结果。
+8. 通用底座支持 `fmea` / `audit` / `report` 三种 `artifact_type`。
+9. MVP 只实际打通 `fmea` 追改。
+10. `audit` / `report` 只做类型预留，不能误执行未完成逻辑。
+11. 不修改 Memory V1 逻辑。
+12. 不修改现有 RAG 主问答流程。
+13. 不修改 Milvus 入库逻辑。
+14. 不做业务产物向量化。
+15. 不做 `quality_case_id`。
+16. 不做 SFT。
+17. 不接 Supervisor / 监管者 Agent。
+18. 不做文件上传。
+19. 不做跨产物联动。
+20. verifier 最多 repair 一次，不允许无限循环。
+21. 不得编造标准条款或引用依据。
+22. `references_json` 不得无故丢失。
+23. 原 FMEA 生成流程必须保持可用。
+
 ## FMEA Agent MVP 开发约束
 
 ### 架构约束
