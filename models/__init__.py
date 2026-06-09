@@ -4,6 +4,7 @@ from models.fmea import FMEARun
 from models.audit import AuditRun
 from models.report import ReportRun
 from models.artifact_version import BusinessArtifactVersion
+from models.collaboration import CollaborationRun, CollaborationStep
 
 __all__ = [
     "User",
@@ -13,4 +14,6 @@ __all__ = [
     "AuditRun",
     "ReportRun",
     "BusinessArtifactVersion",
+    "CollaborationRun",
+    "CollaborationStep",
 ]

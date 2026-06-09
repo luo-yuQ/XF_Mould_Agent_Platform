@@ -24,7 +24,7 @@
 | Phase | 名称 | 当前状态 | 最近测试结果 | Commit |
 | --- | --- | --- | --- | --- |
 | A | 基线冻结与回归保护 | `In Progress` | `15 passed, 1 warning in 2.58s` | `TBD` |
-| B | 协作数据契约 | `Next` | 未运行 | `TBD` |
+| B | 协作数据契约 | `In Progress` | `85 passed in 2.02s` | `TBD` |
 | C | 最小串行多智能体 MVP | `Not Started` | 未运行 | `TBD` |
 | D | 协作前端与任务生命周期 | `Not Started` | 未运行 | `TBD` |
 | E | 多智能体质量评估 | `Not Started` | 未运行 | `TBD` |
@@ -149,17 +149,24 @@ Phase A 最小回归测试已完成；性能、调用次数、成本基线和 RE
 
 ### 计划任务
 
-- [ ] 定义 `SalesCollaborationState`。
-- [ ] 定义 Planner、Specialist、Reviewer schema。
-- [ ] 定义引用、结论、风险和信息缺口契约。
+- [x] 定义 `SalesCollaborationState`。
+- [x] 定义 Planner、Specialist、Reviewer schema。
+- [x] 定义引用、结论、风险和信息缺口契约。
 - [ ] 定义错误码和任务状态。
-- [ ] 设计 `collaboration_runs`、`collaboration_steps`。
-- [ ] 编写 schema 和非法输出测试。
+- [x] 设计 `collaboration_runs`、`collaboration_steps`。
+- [x] 编写 schema 和非法输出测试。
+- [x] 整理 Schema、State 和 DB Model 的职责、映射及数据流转文档。
 
 ### 已完成事项
 
-- 暂无代码实现。
-- 主路线图已给出建议字段和验收方向。
+- Phase B-B1 已新增 `SalesCollaborationState` 和协作 Pydantic schema。
+- Phase B-B1 已覆盖合法数据、非法 Agent、非法置信度、缺少必填字段和字段稳定性测试。
+- Phase B-B2 已新增 `CollaborationRun`、`CollaborationStep` SQLAlchemy 模型及一对多关系。
+- Phase B-B2 已新增 `010_create_collaboration_runs_and_steps.py` migration。
+- Phase B-B2 已覆盖内存 SQLite 建表、CRUD、JSON 持久化、关系和复合唯一约束测试。
+- run 和 step 状态已通过数据库 `CHECK` 约束限定。
+- Phase B-B3 已新增 [`SALES_COLLABORATION_DATA_CONTRACT.md`](./SALES_COLLABORATION_DATA_CONTRACT.md)，明确 Schema 校验、State 流程传递和 DB 持久化三层职责。
+- Phase B-B3 已记录字段映射、典型数据流转、Run/Step 保存边界和当前未实现项。
 
 ### 验收标准
 
@@ -171,20 +178,31 @@ Phase A 最小回归测试已完成；性能、调用次数、成本基线和 RE
 ### 测试命令
 
 ```powershell
-pytest tests/test_collaboration_schemas.py -q
+pytest tests/test_sales_collaboration_schemas.py -q
+pytest tests/test_sales_collaboration_models.py -q
+pytest
 ```
 
-该测试文件尚未创建。
+记录结果：
+
+```text
+8 passed in 0.04s
+5 passed in 0.33s
+85 passed in 2.02s
+```
 
 ### 当前状态
 
-`Next`
+`In Progress`
+
+Phase B-B1、B-B2 和 B-B3 已完成；错误码契约和进入 Phase C 前的整体数据契约评审尚未完成。
 
 ### 遗留问题
 
-- Schema 文件边界尚未确定。
-- 错误码和状态枚举尚未确定。
-- 持久化设计尚未评审。
+- 协作错误码尚未定义。
+- run/step 状态已在数据库层约束，但应用层状态枚举尚未统一导出。
+- migration 尚未连接真实 PostgreSQL 执行；本阶段仅完成声明检查和 SQLite 模型测试。
+- 进入 Phase C 前仍需完成协作数据契约整体评审。
 
 ### 相关 Commit Hash
 
@@ -726,4 +744,5 @@ pytest tests -q
 | 日期 | Phase | 更新内容 | 更新人 | Commit |
 | --- | --- | --- | --- | --- |
 | 2026-06-08 | A | 建立阶段执行记录；登记 Phase A 最小回归测试结果 | Codex | `TBD` |
-
+| 2026-06-08 | B | 完成 B-B1 schema/state 与 B-B2 run/step 持久化模型、migration 和测试 | Codex | `TBD` |
+| 2026-06-08 | B | 完成 B-B3 Schema、State、DB Model 关系文档和 tracker 同步 | Codex | `TBD` |

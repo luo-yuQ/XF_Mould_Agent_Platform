@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from models.audit import AuditRun
 from models.chat import ChatMessage, ChatSession, ChatSessionSummary
+from models.collaboration import CollaborationRun, CollaborationStep
 from models.fmea import FMEARun
 from models.report import ReportRun
 from models.user import User
@@ -34,6 +35,12 @@ class TimezoneContractTests(unittest.TestCase):
             AuditRun.updated_at,
             ReportRun.created_at,
             ReportRun.updated_at,
+            CollaborationRun.created_at,
+            CollaborationRun.updated_at,
+            CollaborationStep.created_at,
+            CollaborationStep.updated_at,
+            CollaborationStep.started_at,
+            CollaborationStep.finished_at,
         )
 
         for column in timestamp_columns:
