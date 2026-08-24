@@ -96,7 +96,8 @@ class SupervisorDecisionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result["sender"], "supervisor")
                 self.assertFalse(result["task_completed"])
                 fake_llm.with_structured_output.assert_called_once_with(
-                    supervisor.RouteDecision
+                    supervisor.RouteDecision,
+                    method="json_mode",
                 )
                 structured_llm.ainvoke.assert_awaited_once()
 

@@ -27,3 +27,27 @@ docker-compose.override.yml
 # OS
 .DS_Store
 Thumbs.db
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+*.egg-info/
+
+# Temporary files and logs
+tmp/
+temp/
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+
+# Test / coverage cache
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

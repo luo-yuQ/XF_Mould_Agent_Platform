@@ -1154,6 +1154,171 @@ body {
   white-space: nowrap;
 }
 
+/* ---- Sales Proposal ---- */
+.sales-results,
+.sales-proposal-page .fmea-error {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sales-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sales-copy-message {
+  width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: right;
+}
+
+.sales-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+
+.sales-meta-grid > div {
+  min-width: 0;
+}
+
+.sales-meta-grid dt {
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.sales-meta-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.sales-meta-wide {
+  grid-column: 1 / -1;
+}
+
+.sales-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sales-status-completed {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.sales-status-failed,
+.sales-status-cancelled {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.sales-status-running,
+.sales-status-planning {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.sales-status-skipped {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.sales-status-description {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.sales-step-list,
+.sales-citation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sales-step {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.sales-step-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sales-step-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.sales-step-heading span:not(.sales-status) {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.sales-step-error {
+  margin-top: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.sales-json-details {
+  margin-top: 10px;
+}
+
+.sales-json-details summary {
+  color: var(--primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sales-json-details pre,
+.sales-citation-list pre,
+.sales-report {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #1e1e2e;
+  color: #d1d5db;
+  font: 12px/1.6 "SF Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+
+.sales-report {
+  margin-top: 0;
+  background: #f9fafb;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.sales-citation-list pre {
+  margin-top: 0;
+}
+
+.sales-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* ---- Citation 引用样式 ---- */
 .citation-ref {
   font-size: 0.75em;
@@ -1344,6 +1509,14 @@ body {
 
   .fmea-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sales-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-meta-wide {
+    grid-column: auto;
   }
 
   .message-row {

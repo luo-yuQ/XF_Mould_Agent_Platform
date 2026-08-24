@@ -15,7 +15,7 @@
 | 层 | 对应代码 | 主要用途 | 是否运行时校验 | 是否写数据库 |
 | --- | --- | --- | --- | --- |
 | Schema | [`schemas/sales_collaboration.py`](../schemas/sales_collaboration.py) | 约束 Agent 输入输出字段和允许值 | 是，Pydantic 校验 | 否 |
-| State | [`agents/sales_collaboration_state.py`](../agents/sales_collaboration_state.py) | 保存一次流程执行中的共享数据 | 否，主要提供类型提示 | 否 |
+| State | [`state.py`](../state.py) | 保存一次流程执行中的共享数据 | 否，主要提供类型提示 | 否 |
 | DB Model | [`models/collaboration.py`](../models/collaboration.py) | 保存任务、步骤、结果、错误和指标 | 是，数据库约束 | 是 |
 
 三者不是重复定义：

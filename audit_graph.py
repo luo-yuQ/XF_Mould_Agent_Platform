@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -31,6 +33,8 @@ from state import AgentState
 from time_utils import utc_now
 from tools.audit_retrieval import build_audit_queries
 from verifiers.audit_verifier import verify_audit_output
+
+logger = logging.getLogger("uvicorn.error")
 
 
 FIELD_LABELS = {
@@ -343,6 +347,11 @@ async def save_audit_run_node(state: AgentState) -> AgentState:
             retrieved_refs=retrieved_refs_json,
         )
     except Exception:
+        logger.exception(
+            "audit.metadata.failed user_id=%s session_id=%s",
+            user_id,
+            session_id,
+        )
         metadata = {
             "title": "审核检查",
             "summary": "",
@@ -380,6 +389,11 @@ async def save_audit_run_node(state: AgentState) -> AgentState:
         db.commit()
         db.refresh(run)
     except Exception as exc:
+        logger.exception(
+            "audit.persist.failed user_id=%s session_id=%s",
+            user_id,
+            session_id,
+        )
         db.rollback()
         return {
             **state,
@@ -394,6 +408,49 @@ async def save_audit_run_node(state: AgentState) -> AgentState:
         "audit_run_id": str(run.id),
         "task_completed": True,
     }
+
+
+def _with_audit_logging(
+    step: str,
+    node: Callable[[AgentState], Awaitable[AgentState]],
+):
+    async def wrapped(state: AgentState) -> AgentState:
+        user_id = state.get("audit_user_id")
+        session_id = state.get("audit_session_id")
+        logger.info(
+            "audit.step.started step=%s user_id=%s session_id=%s",
+            step,
+            user_id,
+            session_id,
+        )
+        try:
+            result = await node(state)
+        except Exception:
+            logger.exception(
+                "audit.step.failed step=%s user_id=%s session_id=%s",
+                step,
+                user_id,
+                session_id,
+            )
+            raise
+
+        logger.info(
+            "audit.step.completed step=%s user_id=%s session_id=%s "
+            "retrieved_count=%s passed=%s run_id=%s",
+            step,
+            user_id,
+            session_id,
+            len(result.get("rag_chunks", [])) if step == "rag_retrieval" else None,
+            (
+                result.get("audit_verification", {}).get("passed")
+                if step == "verifier"
+                else None
+            ),
+            result.get("audit_run_id") if step == "persist" else None,
+        )
+        return result
+
+    return wrapped
 
 
 def _after_intake(state: AgentState) -> Literal["audit_retrieval_planner", "__end__"]:
@@ -415,14 +472,23 @@ def build_audit_graph():
     """构建独立 Audit Check LangGraph 工作流。"""
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("audit_intake", audit_intake_node)
-    workflow.add_node("audit_retrieval_planner", audit_retrieval_planner_node)
-    workflow.add_node("audit_rag_retrieve", audit_rag_retrieve_node)
-    workflow.add_node("audit_check", audit_check_node)
-    workflow.add_node("audit_verify", audit_verify_node)
-    workflow.add_node("audit_repair_once", audit_repair_once_node)
-    workflow.add_node("audit_writer", audit_writer_node)
-    workflow.add_node("save_audit_run", save_audit_run_node)
+    workflow.add_node("audit_intake", _with_audit_logging("input_check", audit_intake_node))
+    workflow.add_node(
+        "audit_retrieval_planner",
+        _with_audit_logging("retrieval_planner", audit_retrieval_planner_node),
+    )
+    workflow.add_node(
+        "audit_rag_retrieve",
+        _with_audit_logging("rag_retrieval", audit_rag_retrieve_node),
+    )
+    workflow.add_node("audit_check", _with_audit_logging("finding_generator", audit_check_node))
+    workflow.add_node("audit_verify", _with_audit_logging("verifier", audit_verify_node))
+    workflow.add_node(
+        "audit_repair_once",
+        _with_audit_logging("repair", audit_repair_once_node),
+    )
+    workflow.add_node("audit_writer", _with_audit_logging("markdown_writer", audit_writer_node))
+    workflow.add_node("save_audit_run", _with_audit_logging("persist", save_audit_run_node))
 
     workflow.add_edge(START, "audit_intake")
     workflow.add_conditional_edges(

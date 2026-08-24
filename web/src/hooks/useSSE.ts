@@ -22,80 +22,74 @@ export function useSSE(): UseSSEReturn {
 
       let fullAnswer = "";
 
-      return new Promise<string>(async (resolve, reject) => {
-        try {
-          const chatHistory = history.map((m) => ({
-            role: m.role,
-            content: m.content,
-          }));
+      try {
+        const chatHistory = history.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
-          const response = await fetch("/api/ask/stream", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question, chat_history: chatHistory }),
-            signal: controller.signal,
-          });
+        const response = await fetch("/api/ask/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, chat_history: chatHistory }),
+          signal: controller.signal,
+        });
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-          const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error("无法读取响应流");
-          }
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error("无法读取响应流");
+        }
 
-          const decoder = new TextDecoder();
-          let buffer = "";
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+          buffer += decoder.decode(value, { stream: true });
 
-            // Parse SSE events from buffer
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || ""; // keep incomplete line in buffer
+          // Parse SSE events from buffer
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // keep incomplete line in buffer
 
-            let currentEvent = "";
-            for (const line of lines) {
-              if (line.startsWith("event: ")) {
-                currentEvent = line.slice(7).trim();
-              } else if (line.startsWith("data: ")) {
-                const dataStr = line.slice(6);
-                try {
-                  const data = JSON.parse(dataStr) as SSEEvent;
-                  if (currentEvent === "status" && data.type === "status") {
-                    setStatus(data.message);
-                  } else if (currentEvent === "token" && data.type === "token") {
-                    fullAnswer += data.content;
-                  } else if (currentEvent === "done" && data.type === "done") {
-                    fullAnswer = data.full_answer || fullAnswer;
-                  }
-                } catch {
-                  // ignore parse errors for incomplete JSON
+          let currentEvent = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              const dataStr = line.slice(6);
+              try {
+                const data = JSON.parse(dataStr) as SSEEvent;
+                if (currentEvent === "status" && data.type === "status") {
+                  setStatus(data.message);
+                } else if (currentEvent === "token" && data.type === "token") {
+                  fullAnswer += data.content;
+                } else if (currentEvent === "done" && data.type === "done") {
+                  fullAnswer = data.full_answer || fullAnswer;
                 }
+              } catch {
+                // ignore parse errors for incomplete JSON
               }
             }
           }
-
-          setIsStreaming(false);
-          setStatus("");
-          abortRef.current = null;
-          resolve(fullAnswer);
-        } catch (err: any) {
-          if (err.name === "AbortError") {
-            setIsStreaming(false);
-            setStatus("");
-            resolve(fullAnswer); // return what we got so far
-          } else {
-            setIsStreaming(false);
-            setStatus("");
-            reject(err);
-          }
         }
-      });
+
+        return fullAnswer;
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return fullAnswer;
+        }
+        throw error;
+      } finally {
+        setIsStreaming(false);
+        setStatus("");
+        abortRef.current = null;
+      }
     },
     []
   );

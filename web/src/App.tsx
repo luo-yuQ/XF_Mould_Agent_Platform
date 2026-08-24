@@ -1,11 +1,36 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Session, Message } from "./types";
+import type { Citation, Session, Message } from "./types";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
 import FMEAGenerator from "./components/FMEAGenerator";
 import AuditCheck from "./components/AuditCheck";
 import ReportGenerator from "./components/ReportGenerator";
 import AuthPage from "./pages/AuthPage";
+import SalesProposalPage from "./pages/SalesProposalPage";
+
+type ActiveView = "chat" | "fmea" | "audit" | "report" | "salesProposal";
+
+interface ChatStreamPayload {
+  message?: string;
+  content?: string;
+  full_answer?: string;
+  title?: string | null;
+  agent_type?: string;
+  citations?: Citation[];
+}
+
+const SALES_PROPOSAL_PATH = "/sales/proposals";
+
+function viewFromPathname(pathname: string): ActiveView {
+  return pathname === SALES_PROPOSAL_PATH ? "salesProposal" : "chat";
+}
+
+function salesProposalRunIdFromLocation() {
+  const runId = new URLSearchParams(window.location.search)
+    .get("run_id")
+    ?.trim();
+  return runId || null;
+}
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -16,7 +41,12 @@ export default function App() {
   const [streamingContent, setStreamingContent] = useState("");
   const [status, setStatus] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeView, setActiveView] = useState<"chat" | "fmea" | "audit" | "report">("chat");
+  const [activeView, setActiveView] = useState<ActiveView>(() =>
+    viewFromPathname(window.location.pathname),
+  );
+  const [salesProposalRunId, setSalesProposalRunId] = useState<string | null>(
+    salesProposalRunIdFromLocation,
+  );
   const abortRef = useRef<AbortController | null>(null);
   // LRU 缓存：保留最近 3 个会话的消息
   const LRU_CACHE_SIZE = 3;
@@ -46,8 +76,48 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadCurrentUser();
+    void Promise.resolve().then(loadCurrentUser);
   }, [loadCurrentUser]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveView(viewFromPathname(window.location.pathname));
+      setSalesProposalRunId(salesProposalRunIdFromLocation());
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const openView = useCallback((view: ActiveView) => {
+    const pathname = view === "salesProposal" ? SALES_PROPOSAL_PATH : "/";
+    const runId = salesProposalRunIdFromLocation();
+    const search = runId
+      ? `?${new URLSearchParams({ run_id: runId }).toString()}`
+      : "";
+    const target = `${pathname}${search}`;
+    if (`${window.location.pathname}${window.location.search}` !== target) {
+      window.history.pushState({}, "", target);
+    }
+    setActiveView(view);
+    setSalesProposalRunId(runId);
+  }, []);
+
+  const openSalesProposalRun = useCallback((runId: string) => {
+    const search = new URLSearchParams({ run_id: runId });
+    window.history.pushState(
+      {},
+      "",
+      `${SALES_PROPOSAL_PATH}?${search.toString()}`,
+    );
+    setActiveView("salesProposal");
+    setSalesProposalRunId(runId);
+  }, []);
+
+  const clearSalesProposalRun = useCallback(() => {
+    window.history.pushState({}, "", SALES_PROPOSAL_PATH);
+    setActiveView("salesProposal");
+    setSalesProposalRunId(null);
+  }, []);
 
   // 登录后从后端拉会话列表
   useEffect(() => {
@@ -132,7 +202,7 @@ export default function App() {
           role: string;
           content: string;
           agent_type: string | null;
-          citations: any[] | null;
+          citations: Citation[] | null;
         }> = await res.json();
         if (cancelled) return;
         const msgs: Message[] = list.map((m) => ({
@@ -214,7 +284,7 @@ export default function App() {
         role: string;
         content: string;
         agent_type: string | null;
-        citations: any[] | null;
+        citations: Citation[] | null;
       }> = await res.json();
       const olderMsgs: Message[] = list.map((m) => ({
         id: m.id,
@@ -406,7 +476,7 @@ export default function App() {
               currentEvent = line.slice(7).trim();
             } else if (line.startsWith("data: ")) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(line.slice(6)) as ChatStreamPayload;
 
                 if (currentEvent === "status") {
                   setStatus(data.message || "");
@@ -443,15 +513,19 @@ export default function App() {
                 } else if (currentEvent === "error") {
                   throw new Error(data.message || "未知错误");
                 }
-              } catch (e: any) {
-                if (e.name === "SyntaxError") continue;
-                throw e;
+              } catch (error: unknown) {
+                if (error instanceof SyntaxError) continue;
+                throw error;
               }
             }
           }
         }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
+      } catch (error: unknown) {
+        const isAbortError =
+          error instanceof DOMException && error.name === "AbortError";
+        if (!isAbortError) {
+          const message =
+            error instanceof Error ? error.message : "未知错误";
           setStreamingContent("");
           setStatus("");
           setIsStreaming(false);
@@ -466,7 +540,7 @@ export default function App() {
                   ...s.messages,
                   {
                     role: "assistant",
-                    content: `请求出错: ${err.message}`,
+                    content: `请求出错: ${message}`,
                   },
                 ],
               },
@@ -507,12 +581,13 @@ export default function App() {
           setCurrentId(id);
           setStreamingContent("");
           setStatus("");
-          setActiveView("chat");
+          openView("chat");
         }}
-        onOpenChat={() => setActiveView("chat")}
-        onOpenFMEA={() => setActiveView("fmea")}
-        onOpenAudit={() => setActiveView("audit")}
-        onOpenReport={() => setActiveView("report")}
+        onOpenChat={() => openView("chat")}
+        onOpenFMEA={() => openView("fmea")}
+        onOpenAudit={() => openView("audit")}
+        onOpenReport={() => openView("report")}
+        onOpenSalesProposal={() => openView("salesProposal")}
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
         onUpdateTitle={handleUpdateTitle}
@@ -524,6 +599,12 @@ export default function App() {
         <AuditCheck sessionId={currentId} />
       ) : activeView === "report" ? (
         <ReportGenerator />
+      ) : activeView === "salesProposal" ? (
+        <SalesProposalPage
+          runId={salesProposalRunId}
+          onRunIdChange={openSalesProposalRun}
+          onNewProposal={clearSalesProposalRun}
+        />
       ) : (
         <ChatWindow
           session={currentSession ?? null}

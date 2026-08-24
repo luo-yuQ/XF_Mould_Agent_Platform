@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
@@ -29,6 +31,8 @@ from agents.report_source_matcher import check_report_source_match
 from schemas.report import ReportInput
 from state import AgentState
 from time_utils import utc_now
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def _report_input_payload(state: AgentState) -> dict[str, Any]:
@@ -180,6 +184,10 @@ async def report_intake_node(state: AgentState) -> AgentState:
     try:
         report_input = ReportInput.model_validate(_report_input_payload(state))
     except Exception as exc:
+        logger.exception(
+            "report.input_check.failed user_id=%s",
+            state.get("report_user_id"),
+        )
         return {
             **state,
             "sender": "report_intake",
@@ -421,6 +429,10 @@ async def save_report_run_node(state: AgentState) -> AgentState:
             source_snapshot=source_snapshot,
         )
     except Exception:
+        logger.exception(
+            "report.metadata.failed user_id=%s",
+            user_id,
+        )
         metadata = {
             "summary": "",
             "keywords_json": [],
@@ -452,6 +464,12 @@ async def save_report_run_node(state: AgentState) -> AgentState:
         db.commit()
         db.refresh(run)
     except Exception as exc:
+        logger.exception(
+            "report.persist.failed user_id=%s fmea_run_id=%s audit_run_id=%s",
+            user_id,
+            report_input.fmea_run_id,
+            report_input.audit_run_id,
+        )
         db.rollback()
         return {
             **state,
@@ -468,6 +486,64 @@ async def save_report_run_node(state: AgentState) -> AgentState:
         "report_run_id": str(run.id),
         "task_completed": False,
     }
+
+
+def _with_report_logging(
+    step: str,
+    node: Callable[[AgentState], Awaitable[AgentState]],
+):
+    async def wrapped(state: AgentState) -> AgentState:
+        user_id = state.get("report_user_id")
+        raw_input = state.get("report_input_raw", {})
+        if not isinstance(raw_input, dict):
+            raw_input = {}
+        logger.info(
+            "report.step.started step=%s user_id=%s fmea_run_id=%s audit_run_id=%s",
+            step,
+            user_id,
+            raw_input.get("fmea_run_id"),
+            raw_input.get("audit_run_id"),
+        )
+        try:
+            result = await node(state)
+        except Exception:
+            logger.exception(
+                "report.step.failed step=%s user_id=%s fmea_run_id=%s "
+                "audit_run_id=%s",
+                step,
+                user_id,
+                raw_input.get("fmea_run_id"),
+                raw_input.get("audit_run_id"),
+            )
+            raise
+
+        match_result = result.get("report_source_match_result", {})
+        logger.info(
+            "report.step.completed step=%s user_id=%s retrieved_count=%s "
+            "matched=%s manual_check_required=%s passed=%s report_run_id=%s",
+            step,
+            user_id,
+            (
+                len(result.get("report_rag_refs", []))
+                if step == "optional_rag"
+                else None
+            ),
+            match_result.get("matched") if step == "source_match_check" else None,
+            (
+                match_result.get("manual_check_required")
+                if step == "source_match_check"
+                else None
+            ),
+            (
+                result.get("report_verify_result", {}).get("passed")
+                if step == "verifier"
+                else None
+            ),
+            result.get("report_run_id") if step == "persist" else None,
+        )
+        return result
+
+    return wrapped
 
 
 async def final_response_node(state: AgentState) -> AgentState:
@@ -506,16 +582,34 @@ def build_report_graph():
     """构建独立 Report LangGraph 工作流。"""
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("report_intake", report_intake_node)
-    workflow.add_node("report_load_sources", report_load_sources_node)
-    workflow.add_node("report_source_match", report_source_match_node)
-    workflow.add_node("report_optional_rag_retrieve", report_optional_rag_retrieve_node)
-    workflow.add_node("report_context_builder", report_context_builder_node)
-    workflow.add_node("report_writer", report_writer_node)
-    workflow.add_node("report_verify", report_verify_node)
-    workflow.add_node("report_repair_once", report_repair_once_node)
-    workflow.add_node("save_report_run", save_report_run_node)
-    workflow.add_node("final_response", final_response_node)
+    workflow.add_node("report_intake", _with_report_logging("input_check", report_intake_node))
+    workflow.add_node(
+        "report_load_sources",
+        _with_report_logging("source_loading", report_load_sources_node),
+    )
+    workflow.add_node(
+        "report_source_match",
+        _with_report_logging("source_match_check", report_source_match_node),
+    )
+    workflow.add_node(
+        "report_optional_rag_retrieve",
+        _with_report_logging("optional_rag", report_optional_rag_retrieve_node),
+    )
+    workflow.add_node(
+        "report_context_builder",
+        _with_report_logging("context_build", report_context_builder_node),
+    )
+    workflow.add_node("report_writer", _with_report_logging("writer", report_writer_node))
+    workflow.add_node("report_verify", _with_report_logging("verifier", report_verify_node))
+    workflow.add_node(
+        "report_repair_once",
+        _with_report_logging("repair", report_repair_once_node),
+    )
+    workflow.add_node("save_report_run", _with_report_logging("persist", save_report_run_node))
+    workflow.add_node(
+        "final_response",
+        _with_report_logging("final_response", final_response_node),
+    )
 
     workflow.add_edge(START, "report_intake")
     workflow.add_conditional_edges(

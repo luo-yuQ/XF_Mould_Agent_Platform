@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -31,6 +33,8 @@ from state import AgentState
 from time_utils import utc_now
 from tools.fmea_retrieval import build_fmea_queries
 from verifiers.fmea_verifier import verify_fmea_output
+
+logger = logging.getLogger("uvicorn.error")
 
 
 FIELD_LABELS = {
@@ -330,6 +334,11 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
             retrieved_refs=retrieved_refs_json,
         )
     except Exception:
+        logger.exception(
+            "fmea.metadata.failed user_id=%s session_id=%s",
+            user_id,
+            session_id,
+        )
         metadata = {
             "title": "FMEA分析",
             "summary": "",
@@ -374,6 +383,11 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
         db.commit()
         db.refresh(run)
     except Exception as exc:
+        logger.exception(
+            "fmea.persist.failed user_id=%s session_id=%s",
+            user_id,
+            session_id,
+        )
         db.rollback()
         return {
             **state,
@@ -390,6 +404,49 @@ async def save_fmea_run_node(state: AgentState) -> AgentState:
         "fmea_current_version_no": initial_version.version_no if initial_version else None,
         "task_completed": True,
     }
+
+
+def _with_fmea_logging(
+    step: str,
+    node: Callable[[AgentState], Awaitable[AgentState]],
+):
+    async def wrapped(state: AgentState) -> AgentState:
+        user_id = state.get("fmea_user_id")
+        session_id = state.get("fmea_session_id")
+        logger.info(
+            "fmea.step.started step=%s user_id=%s session_id=%s",
+            step,
+            user_id,
+            session_id,
+        )
+        try:
+            result = await node(state)
+        except Exception:
+            logger.exception(
+                "fmea.step.failed step=%s user_id=%s session_id=%s",
+                step,
+                user_id,
+                session_id,
+            )
+            raise
+
+        logger.info(
+            "fmea.step.completed step=%s user_id=%s session_id=%s "
+            "retrieved_count=%s passed=%s run_id=%s",
+            step,
+            user_id,
+            session_id,
+            len(result.get("rag_chunks", [])) if step == "rag_retrieval" else None,
+            (
+                result.get("fmea_verification", {}).get("passed")
+                if step == "verifier"
+                else None
+            ),
+            result.get("fmea_run_id") if step == "persist" else None,
+        )
+        return result
+
+    return wrapped
 
 
 def _after_intake(state: AgentState) -> Literal["fmea_retrieval_planner", "__end__"]:
@@ -411,14 +468,23 @@ def build_fmea_graph():
     """构建独立 FMEA LangGraph 工作流。"""
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("fmea_intake", fmea_intake_node)
-    workflow.add_node("fmea_retrieval_planner", fmea_retrieval_planner_node)
-    workflow.add_node("fmea_rag_retrieve", fmea_rag_retrieve_node)
-    workflow.add_node("fmea_generate", fmea_generate_node)
-    workflow.add_node("fmea_verify", fmea_verify_node)
-    workflow.add_node("fmea_repair_once", fmea_repair_once_node)
-    workflow.add_node("fmea_writer", fmea_writer_node)
-    workflow.add_node("save_fmea_run", save_fmea_run_node)
+    workflow.add_node("fmea_intake", _with_fmea_logging("input_check", fmea_intake_node))
+    workflow.add_node(
+        "fmea_retrieval_planner",
+        _with_fmea_logging("retrieval_planner", fmea_retrieval_planner_node),
+    )
+    workflow.add_node(
+        "fmea_rag_retrieve",
+        _with_fmea_logging("rag_retrieval", fmea_rag_retrieve_node),
+    )
+    workflow.add_node("fmea_generate", _with_fmea_logging("generator", fmea_generate_node))
+    workflow.add_node("fmea_verify", _with_fmea_logging("verifier", fmea_verify_node))
+    workflow.add_node(
+        "fmea_repair_once",
+        _with_fmea_logging("repair", fmea_repair_once_node),
+    )
+    workflow.add_node("fmea_writer", _with_fmea_logging("markdown_writer", fmea_writer_node))
+    workflow.add_node("save_fmea_run", _with_fmea_logging("persist", save_fmea_run_node))
 
     workflow.add_edge(START, "fmea_intake")
     workflow.add_conditional_edges(

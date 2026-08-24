@@ -4,7 +4,7 @@ import type { Session } from "../types";
 interface Props {
   sessions: Session[];
   currentId: string | null;
-  activeView: "chat" | "fmea" | "audit" | "report";
+  activeView: "chat" | "fmea" | "audit" | "report" | "salesProposal";
   username: string | null;
   isStreaming: boolean;
   onSelect: (id: string) => void;
@@ -12,6 +12,7 @@ interface Props {
   onOpenFMEA: () => void;
   onOpenAudit: () => void;
   onOpenReport: () => void;
+  onOpenSalesProposal: () => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onUpdateTitle: (id: string, title: string) => Promise<boolean>;
@@ -29,6 +30,7 @@ export default function Sidebar({
   onOpenFMEA,
   onOpenAudit,
   onOpenReport,
+  onOpenSalesProposal,
   onNew,
   onDelete,
   onUpdateTitle,
@@ -117,6 +119,13 @@ export default function Sidebar({
           disabled={isStreaming}
         >
           报告生成
+        </button>
+        <button
+          className={`module-entry ${activeView === "salesProposal" ? "active" : ""}`}
+          onClick={onOpenSalesProposal}
+          disabled={isStreaming}
+        >
+          售前方案
         </button>
       </div>
 

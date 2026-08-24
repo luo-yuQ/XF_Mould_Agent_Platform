@@ -1,5 +1,6 @@
 """销售协作多智能体的数据契约。"""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -103,3 +104,55 @@ class ReviewerOutput(BaseModel):
     missing_sections: list[str] = Field(default_factory=list)
     manual_check_items: list[str] = Field(default_factory=list)
     repair_instructions: list[str] = Field(default_factory=list)
+
+
+class ProposalWriterOutput(BaseModel):
+    """售前方案 Writer 的结构化输出。"""
+
+    final_report: str
+    summary: str
+    citations: list[Citation] = Field(default_factory=list)
+
+
+class SalesProposalGenerateRequest(BaseModel):
+    """创建销售协作方案的 API 输入。"""
+
+    user_request: str
+    customer_context: dict = Field(default_factory=dict)
+    session_id: str | None = None
+
+
+class SalesProposalResponse(BaseModel):
+    """销售协作运行的完整 API 输出。"""
+
+    run_id: str
+    status: str
+    title: str = "售前协作方案"
+    summary: str = ""
+    user_request: str
+    customer_context: dict = Field(default_factory=dict)
+    final_report: str = ""
+    execution_plan: list[dict] = Field(default_factory=list)
+    review_result: dict = Field(default_factory=dict)
+    citations: list[dict] = Field(default_factory=list)
+    error: str | None = None
+    metrics: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SalesProposalStepResponse(BaseModel):
+    """销售协作单步执行记录的 API 输出。"""
+
+    step_id: str
+    step_name: str
+    agent: str
+    status: str
+    input_json: dict | list | str | int | float | bool | None = None
+    output_json: dict | list | str | int | float | bool | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    duration_ms: int | None = None
+    model_info_json: dict | None = None
+    metrics_json: dict | None = None

@@ -7,6 +7,7 @@ from typing import Literal
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
+from agents.structured_llm import ainvoke_structured_json
 from state import AgentState
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 
@@ -104,10 +105,13 @@ async def supervisor_node(state: AgentState) -> AgentState:
 
     import json, re
 
-    # 使用结构化输出
-    structured_llm = LLM.with_structured_output(RouteDecision)
+    # 使用结构化输出（json_mode 兼容 DashScope）
     try:
-        decision = await structured_llm.ainvoke(prompt_messages)
+        decision = await ainvoke_structured_json(
+            LLM,
+            RouteDecision,
+            prompt_messages,
+        )
     except Exception:
         # 兜底：解析 JSON
         raw = (await LLM.ainvoke(prompt_messages)).content

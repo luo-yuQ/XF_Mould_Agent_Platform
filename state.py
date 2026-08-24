@@ -4,6 +4,25 @@ XF 模具智能体平台 - 共享状态定义
 from typing import Any, NotRequired, Sequence, TypedDict
 
 
+class SalesCollaborationState(TypedDict):
+    """销售协作多智能体之间传递的共享状态。"""
+
+    request_id: str
+    user_id: int
+    session_id: str | None
+    user_request: str
+    customer_context: dict
+    execution_plan: list[dict]
+    rd_analysis: dict
+    quality_analysis: dict
+    optional_artifacts: list[dict]
+    review_result: dict
+    final_report: str
+    citations: list[dict]
+    status: str
+    error: str | None
+
+
 class AgentState(TypedDict):
     """LangGraph 共享状态"""
 

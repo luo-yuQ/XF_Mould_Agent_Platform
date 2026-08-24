@@ -50,8 +50,10 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
         setPassword("");
         setError("注册成功，请登录");
       }
-    } catch (err: any) {
-      setError(err.message || "网络错误");
+    } catch (requestError: unknown) {
+      setError(
+        requestError instanceof Error ? requestError.message : "网络错误",
+      );
     } finally {
       setLoading(false);
     }

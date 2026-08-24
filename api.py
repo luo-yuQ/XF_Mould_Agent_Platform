@@ -4,6 +4,8 @@ XF 模具智能体平台 - FastAPI 后端服务
 """
 import asyncio
 import json
+import logging
+import uuid
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
@@ -28,6 +30,7 @@ from graph import build_graph
 from fmea_graph import build_fmea_graph
 from audit_graph import build_audit_graph
 from report_graph import build_report_graph
+from graphs.sales_collaboration_graph import build_sales_collaboration_graph
 from config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, LLM_MODEL, LLM_TEMPERATURE
 from schemas.artifact_revision import (
     ArtifactListItem,
@@ -42,8 +45,21 @@ from services.artifact_revision_service import (
     list_session_artifacts,
     revise_artifact_version,
 )
+from repositories.collaboration_repository import (
+    create_collaboration_run,
+    fail_collaboration_run,
+    finalize_collaboration_run,
+    get_owned_collaboration_run,
+    list_collaboration_steps,
+)
+from schemas.sales_collaboration import (
+    SalesProposalGenerateRequest,
+    SalesProposalResponse,
+    SalesProposalStepResponse,
+)
 from time_utils import utc_now
 
+logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="XF 模具智能体平台 API")
 
@@ -357,6 +373,7 @@ _agent_graph = None
 _fmea_graph = None
 _audit_graph = None
 _report_graph = None
+_sales_collaboration_graph = None
 
 def get_agent_graph():
     global _agent_graph
@@ -384,6 +401,13 @@ def get_report_graph():
     if _report_graph is None:
         _report_graph = build_report_graph()
     return _report_graph
+
+
+def get_sales_collaboration_graph():
+    global _sales_collaboration_graph
+    if _sales_collaboration_graph is None:
+        _sales_collaboration_graph = build_sales_collaboration_graph()
+    return _sales_collaboration_graph
 
 
 def _build_state(
@@ -548,6 +572,226 @@ def _require_user(user: User | None) -> User:
     if not user:
         raise HTTPException(status_code=401, detail="未登录")
     return user
+
+
+def _sales_proposal_summary(final_report: str | None, limit: int = 200) -> str:
+    """从 Markdown 报告中提取简短摘要。"""
+    lines = [
+        line.strip()
+        for line in str(final_report or "").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    summary = " ".join(lines)
+    return summary[:limit] + ("..." if len(summary) > limit else "")
+
+
+def _sales_proposal_response(run) -> SalesProposalResponse:
+    return SalesProposalResponse(
+        run_id=run.run_id,
+        status=run.status,
+        title="售前协作方案",
+        summary=_sales_proposal_summary(run.final_report),
+        user_request=run.user_request,
+        customer_context=run.customer_context_json or {},
+        final_report=run.final_report or "",
+        execution_plan=run.execution_plan_json or [],
+        review_result=run.review_result_json or {},
+        citations=run.citations_json or [],
+        error=run.error,
+        metrics=run.metrics_json,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+    )
+
+
+def _sales_step_response(step) -> SalesProposalStepResponse:
+    return SalesProposalStepResponse(
+        step_id=step.step_id,
+        step_name=step.step_name,
+        agent=step.agent,
+        status=step.status,
+        input_json=step.input_json,
+        output_json=step.output_json,
+        error=step.error,
+        started_at=step.started_at,
+        finished_at=step.finished_at,
+        duration_ms=step.duration_ms,
+        model_info_json=step.model_info_json,
+        metrics_json=step.metrics_json,
+    )
+
+
+def _sales_generation_error(run_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "code": "sales_collaboration_failed",
+            "message": "售前协作方案生成失败",
+            "run_id": run_id,
+        },
+    )
+
+
+# ---- 销售协作方案 ----
+@app.post(
+    "/sales/proposals/generate",
+    response_model=SalesProposalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generate_sales_proposal(
+    request: SalesProposalGenerateRequest,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """执行销售协作 graph，并持久化 run 和全部 steps。"""
+    user = _require_user(user)
+    logger.info(
+        "sales_collaboration.request.started user_id=%s session_id=%s",
+        user.id,
+        request.session_id,
+    )
+    user_request = request.user_request.strip()
+    if not user_request:
+        logger.warning(
+            "sales_collaboration.request.failed user_id=%s session_id=%s "
+            "reason=empty_request",
+            user.id,
+            request.session_id,
+        )
+        raise HTTPException(status_code=400, detail="user_request 不能为空")
+
+    if request.session_id and not _get_owned_session(db, request.session_id, user.id):
+        logger.warning(
+            "sales_collaboration.request.failed user_id=%s session_id=%s "
+            "reason=session_not_found",
+            user.id,
+            request.session_id,
+        )
+        raise HTTPException(status_code=404, detail="会话不存在或无权限")
+
+    run_id = f"sales_{uuid.uuid4().hex}"
+    run = create_collaboration_run(
+        db,
+        run_id=run_id,
+        user_id=user.id,
+        session_id=request.session_id,
+        user_request=user_request,
+        customer_context=request.customer_context,
+    )
+    logger.info(
+        "sales_collaboration.request.run_created run_id=%s user_id=%s "
+        "session_id=%s",
+        run_id,
+        user.id,
+        request.session_id,
+    )
+    state = {
+        "request_id": run_id,
+        "user_id": user.id,
+        "session_id": request.session_id,
+        "user_request": user_request,
+        "customer_context": request.customer_context,
+        "status": "running",
+        "error": None,
+    }
+
+    try:
+        final_state = await get_sales_collaboration_graph().ainvoke(
+            state,
+            config={"recursion_limit": 20},
+        )
+    except Exception:
+        logger.exception(
+            "sales_collaboration.request.failed run_id=%s user_id=%s "
+            "session_id=%s phase=graph",
+            run_id,
+            user.id,
+            request.session_id,
+        )
+        db.rollback()
+        fail_collaboration_run(
+            db,
+            run=run,
+            error="Sales collaboration graph execution failed.",
+        )
+        raise _sales_generation_error(run_id)
+
+    try:
+        run = finalize_collaboration_run(db, run=run, final_state=final_state)
+    except Exception:
+        logger.exception(
+            "sales_collaboration.request.failed run_id=%s user_id=%s "
+            "session_id=%s phase=persist",
+            run_id,
+            user.id,
+            request.session_id,
+        )
+        db.rollback()
+        fail_collaboration_run(
+            db,
+            run=run,
+            error="Sales collaboration persistence failed.",
+            final_state=final_state,
+        )
+        raise _sales_generation_error(run_id)
+
+    if run.status != "completed":
+        logger.error(
+            "sales_collaboration.request.failed run_id=%s user_id=%s "
+            "session_id=%s status=%s error=%s",
+            run_id,
+            user.id,
+            request.session_id,
+            run.status,
+            str(run.error or "")[:300],
+        )
+        raise _sales_generation_error(run_id)
+    logger.info(
+        "sales_collaboration.request.completed run_id=%s user_id=%s "
+        "session_id=%s status=%s",
+        run_id,
+        user.id,
+        request.session_id,
+        run.status,
+    )
+    return _sales_proposal_response(run)
+
+
+@app.get(
+    "/sales/proposals/{run_id}",
+    response_model=SalesProposalResponse,
+)
+def get_sales_proposal(
+    run_id: str,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """查询当前用户拥有的销售协作 run。"""
+    user = _require_user(user)
+    run = get_owned_collaboration_run(db, run_id=run_id, user_id=user.id)
+    if not run:
+        raise HTTPException(status_code=404, detail="售前协作任务不存在或无权限")
+    return _sales_proposal_response(run)
+
+
+@app.get(
+    "/sales/proposals/{run_id}/steps",
+    response_model=list[SalesProposalStepResponse],
+)
+def get_sales_proposal_steps(
+    run_id: str,
+    user: User | None = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """查询当前用户拥有的销售协作步骤。"""
+    user = _require_user(user)
+    run = get_owned_collaboration_run(db, run_id=run_id, user_id=user.id)
+    if not run:
+        raise HTTPException(status_code=404, detail="售前协作任务不存在或无权限")
+    return [
+        _sales_step_response(step)
+        for step in list_collaboration_steps(db, run_id=run.run_id)
+    ]
 
 
 # ---- 会话管理 ----
@@ -748,8 +992,18 @@ async def generate_fmea(
 ):
     """独立 FMEA 生成接口：不写 ChatMessage，不触发 Memory。"""
     user = _require_user(user)
+    logger.info(
+        "fmea.request.started user_id=%s session_id=%s artifact_type=fmea",
+        user.id,
+        request.session_id,
+    )
     session = _get_owned_session(db, request.session_id, user.id)
     if not session:
+        logger.warning(
+            "fmea.request.failed user_id=%s session_id=%s reason=session_not_found",
+            user.id,
+            request.session_id,
+        )
         raise HTTPException(status_code=404, detail="会话不存在或无权限")
 
     state: AgentState = {
@@ -789,12 +1043,24 @@ async def generate_fmea(
     try:
         final_state = await get_fmea_graph().ainvoke(state, config={"recursion_limit": 20})
     except Exception as exc:
+        logger.exception(
+            "fmea.request.failed user_id=%s session_id=%s",
+            user.id,
+            session.id,
+        )
         raise HTTPException(status_code=500, detail=f"FMEA 生成失败: {exc}") from exc
 
     messages = final_state.get("messages", [])
     final_answer = messages[-1].content if messages else final_state.get("fmea_markdown", "")
+    if final_state.get("fmea_error"):
+        logger.error(
+            "fmea.request.failed user_id=%s session_id=%s error=%s",
+            user.id,
+            session.id,
+            str(final_state.get("fmea_error"))[:300],
+        )
 
-    return FMEAGenerateResponse(
+    response = FMEAGenerateResponse(
         final_answer=final_answer,
         fmea_run_id=final_state.get("fmea_run_id"),
         artifact_id=final_state.get("fmea_run_id"),
@@ -803,6 +1069,13 @@ async def generate_fmea(
         fmea_rows=final_state.get("fmea_rows", []),
         verify_result=final_state.get("fmea_verification", {}),
     )
+    logger.info(
+        "fmea.request.completed run_id=%s user_id=%s session_id=%s",
+        response.fmea_run_id,
+        user.id,
+        session.id,
+    )
+    return response
 
 
 # ---- 业务产物版本与追改 ----
@@ -911,8 +1184,18 @@ async def check_audit(
 ):
     """独立审核检查接口：不写 ChatMessage，不触发 Memory。"""
     user = _require_user(user)
+    logger.info(
+        "audit.request.started user_id=%s session_id=%s artifact_type=audit",
+        user.id,
+        request.session_id,
+    )
     session = _get_owned_session(db, request.session_id, user.id)
     if not session:
+        logger.warning(
+            "audit.request.failed user_id=%s session_id=%s reason=session_not_found",
+            user.id,
+            request.session_id,
+        )
         raise HTTPException(status_code=404, detail="会话不存在或无权限")
 
     state: AgentState = {
@@ -952,10 +1235,22 @@ async def check_audit(
     try:
         final_state = await get_audit_graph().ainvoke(state, config={"recursion_limit": 20})
     except Exception as exc:
+        logger.exception(
+            "audit.request.failed user_id=%s session_id=%s",
+            user.id,
+            session.id,
+        )
         raise HTTPException(status_code=500, detail=f"审核检查失败: {exc}") from exc
 
     messages = final_state.get("messages", [])
     final_answer = messages[-1].content if messages else final_state.get("audit_markdown", "")
+    if final_state.get("audit_error"):
+        logger.error(
+            "audit.request.failed user_id=%s session_id=%s error=%s",
+            user.id,
+            session.id,
+            str(final_state.get("audit_error"))[:300],
+        )
     citation_map = final_state.get("citation_map", {})
     references = [
         {"id": key, **value}
@@ -963,13 +1258,20 @@ async def check_audit(
         if isinstance(value, dict)
     ]
 
-    return AuditCheckResponse(
+    response = AuditCheckResponse(
         final_answer=final_answer,
         audit_run_id=final_state.get("audit_run_id"),
         findings=final_state.get("audit_findings", []),
         verify_result=final_state.get("audit_verification", {}),
         references=references,
     )
+    logger.info(
+        "audit.request.completed run_id=%s user_id=%s session_id=%s",
+        response.audit_run_id,
+        user.id,
+        session.id,
+    )
+    return response
 
 
 def _trim_text(value: str | None, limit: int = 120) -> str:
@@ -1110,15 +1412,36 @@ async def generate_report(
 ):
     """根据用户明确选择的 FMEA / Audit run_id 生成质量问题分析报告。"""
     user = _require_user(user)
+    logger.info(
+        "report.request.started user_id=%s artifact_type=report "
+        "fmea_run_id=%s audit_run_id=%s",
+        user.id,
+        request.fmea_run_id,
+        request.audit_run_id,
+    )
     if request.report_type != "quality_issue_report":
+        logger.warning(
+            "report.request.failed user_id=%s reason=unsupported_report_type",
+            user.id,
+        )
         raise HTTPException(status_code=400, detail="report_type 当前只支持 quality_issue_report")
 
-    _ensure_owned_report_source_runs(
-        db=db,
-        user_id=user.id,
-        fmea_run_id=request.fmea_run_id,
-        audit_run_id=request.audit_run_id,
-    )
+    try:
+        _ensure_owned_report_source_runs(
+            db=db,
+            user_id=user.id,
+            fmea_run_id=request.fmea_run_id,
+            audit_run_id=request.audit_run_id,
+        )
+    except HTTPException:
+        logger.warning(
+            "report.request.failed user_id=%s fmea_run_id=%s audit_run_id=%s "
+            "reason=source_not_found",
+            user.id,
+            request.fmea_run_id,
+            request.audit_run_id,
+        )
+        raise
 
     state: AgentState = {
         "messages": [],
@@ -1149,15 +1472,35 @@ async def generate_report(
     try:
         final_state = await get_report_graph().ainvoke(state, config={"recursion_limit": 20})
     except HTTPException:
+        logger.exception(
+            "report.request.failed user_id=%s fmea_run_id=%s audit_run_id=%s",
+            user.id,
+            request.fmea_run_id,
+            request.audit_run_id,
+        )
         raise
     except Exception as exc:
+        logger.exception(
+            "report.request.failed user_id=%s fmea_run_id=%s audit_run_id=%s",
+            user.id,
+            request.fmea_run_id,
+            request.audit_run_id,
+        )
         raise HTTPException(status_code=500, detail=f"报告生成失败：{exc}") from exc
 
     if final_state.get("report_error"):
+        logger.error(
+            "report.request.failed user_id=%s fmea_run_id=%s audit_run_id=%s "
+            "error=%s",
+            user.id,
+            request.fmea_run_id,
+            request.audit_run_id,
+            str(final_state.get("report_error"))[:300],
+        )
         raise HTTPException(status_code=500, detail=final_state.get("report_error"))
 
     report_result = final_state.get("report_result", {}) or {}
-    return ReportGenerateResponse(
+    response = ReportGenerateResponse(
         final_markdown=report_result.get("final_markdown") or final_state.get("report_markdown", ""),
         report_run_id=final_state.get("report_run_id"),
         verify_result=report_result.get("verify_result") or final_state.get("report_verify_result", {}),
@@ -1165,6 +1508,15 @@ async def generate_report(
         manual_check_items=report_result.get("manual_check_items", []),
         source_match_result=report_result.get("source_match_result", {}),
     )
+    logger.info(
+        "report.request.completed report_run_id=%s user_id=%s "
+        "fmea_run_id=%s audit_run_id=%s",
+        response.report_run_id,
+        user.id,
+        request.fmea_run_id,
+        request.audit_run_id,
+    )
+    return response
 
 
 @app.post("/api/ask/stream")
@@ -1327,3 +1679,4 @@ async def ask_stream(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+

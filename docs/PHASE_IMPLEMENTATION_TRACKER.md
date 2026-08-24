@@ -25,7 +25,7 @@
 | --- | --- | --- | --- | --- |
 | A | 基线冻结与回归保护 | `In Progress` | `15 passed, 1 warning in 2.58s` | `TBD` |
 | B | 协作数据契约 | `In Progress` | `85 passed in 2.02s` | `TBD` |
-| C | 最小串行多智能体 MVP | `Not Started` | 未运行 | `TBD` |
+| C | 最小串行多智能体 MVP | `Completed` | `123 passed, 1 warning in 2.62s` | `TBD` |
 | D | 协作前端与任务生命周期 | `Not Started` | 未运行 | `TBD` |
 | E | 多智能体质量评估 | `Not Started` | 未运行 | `TBD` |
 | F | Planner 路由与按需专业工作流 | `Not Started` | 未运行 | `TBD` |
@@ -159,7 +159,7 @@ Phase A 最小回归测试已完成；性能、调用次数、成本基线和 RE
 
 ### 已完成事项
 
-- Phase B-B1 已新增 `SalesCollaborationState` 和协作 Pydantic schema。
+- Phase B-B1 已在 `state.py` 新增 `SalesCollaborationState`，并新增协作 Pydantic schema。
 - Phase B-B1 已覆盖合法数据、非法 Agent、非法置信度、缺少必填字段和字段稳定性测试。
 - Phase B-B2 已新增 `CollaborationRun`、`CollaborationStep` SQLAlchemy 模型及一对多关系。
 - Phase B-B2 已新增 `010_create_collaboration_runs_and_steps.py` migration。
@@ -236,17 +236,49 @@ Phase B-B1、B-B2 和 B-B3 已完成；错误码契约和进入 Phase C 前的�
 
 ### 计划任务
 
-- [ ] 新增串行协作 graph。
-- [ ] 实现 Planner、Reviewer 和 Final Verifier。
-- [ ] 包装 R&D、Quality 结构化输出。
-- [ ] 实现 Proposal Writer。
-- [ ] 持久化 run 和 step。
-- [ ] 新增独立生成与查询 API。
-- [ ] 编写节点、图、API 和失败恢复测试。
+- [x] 新增串行协作 graph 骨架。
+- [x] 实现真实 Planner、规则 Reviewer 和 Final Verifier。
+- [x] 接入 R&D、Quality Specialist 结构化包装层。
+- [x] 实现受证据约束的结构化 Proposal Writer。
+- [x] 持久化 run 和 step。
+- [x] 新增独立生成与查询 API。
+- [x] 编写节点、图、API 和失败状态持久化测试。
 
 ### 已完成事项
 
-- 暂无。
+- Phase C-C1 新增 `graphs/sales_collaboration_graph.py`，固定串行执行 Intake、Planner、R&D、Quality、Reviewer、Writer、Final Verifier 和 Persist Run。
+- 所有业务节点均使用确定性 mock 输出，并通过 Phase B Pydantic schema 构造 Planner、Specialist 和 Reviewer 结果。
+- graph 扩展状态已记录各步骤的 `pending`、`completed`、`failed` 和 `skipped` 状态，后续可映射到 `CollaborationStep`。
+- `persist_collaboration_run(state)` 已作为持久化扩展点预留；C-C1 不写真实数据库。
+- 新增合法请求完整流转、Phase B Specialist 输出结构和空请求失败测试。
+- C-C1 未调用 LLM、RAG、Milvus、Embedding、FMEA、Audit 或 Report 工作流。
+- Phase C-C2 新增销售协作 R&D Specialist，复用 `xf_fmea_kb` 和现有 `retrieve_structured`，通过协作专用结构化 LLM 输出 `SpecialistOutput`。
+- Phase C-C2 新增销售协作 Quality Specialist，复用 `xf_quality_kb` 和现有 `retrieve_structured`，通过协作专用结构化 LLM 输出 `SpecialistOutput`。
+- 两个包装层均接收 `user_request`、`customer_context`、完整 `execution_plan` 和当前 task，并限制各自专业边界。
+- 检索 chunk 已映射为 Phase B `Citation`；模型引用会按真实 chunk allowlist 清洗，不能保留虚构引用。
+- 无检索结果时清空引用、禁止 `high` 置信度，并保证至少存在一个信息缺口。
+- graph 默认调用真实 Specialist 包装层，同时支持测试注入 deterministic Specialist。
+- Specialist 单元测试使用 fake retriever 和 fake structured LLM，不连接 Milvus、Embedding 或外部 LLM。
+- Phase C-C3 新增 `POST /sales/proposals/generate`，先保存 `running` run，再执行销售协作 graph。
+- Phase C-C3 新增 `GET /sales/proposals/{run_id}` 和 `GET /sales/proposals/{run_id}/steps`，并按当前登录用户校验数据归属。
+- 新增 collaboration repository，将 graph 的 `collaboration_steps` 或 mock `steps` 映射为 `CollaborationStep`，按 graph 顺序保存输入、输出、状态、错误和可选指标。
+- graph 完成后更新 `CollaborationRun` 的执行计划、报告、审核结果、引用、错误和指标；graph 异常时保留 `failed` run。
+- API 失败响应使用稳定错误码和消息，不返回 Python traceback 或内部异常文本。
+- API 测试使用内存 SQLite 和 mock graph，不调用外部 LLM、Milvus 或 Embedding。
+- C-C3 回归确认现有 FMEA、Audit、Report API snapshot 未发生变化。
+- Phase C-C4 新增结构化 Planner：默认调用 LLM 生成 `PlannerOutput`，非法 Agent、缺少核心角色或模型异常时回退到固定 R&D/Quality/Reviewer/Writer 计划。
+- Planner 通过 Pydantic allowlist 限制 Agent；FMEA/Audit 仅形成 warning 和 `optional_artifacts` 占位，不会被 graph 自动执行。
+- Phase C-C4 新增规则优先 Reviewer，检查 Specialist 缺失、角色越权、无引用强结论、人工确认项和 Writer 所需章节；可选 LLM 审核默认关闭。
+- Phase C-C4 新增结构化 Proposal Writer：LLM 只能选择已有 claim/risk/recommendation ID，最终 Markdown 从原始 Specialist/Reviewer 内容确定性渲染。
+- Proposal Writer 固定输出六个章节，保留 Reviewer conflicts、unsupported claims、manual checks、missing sections 和 repair instructions。
+- Final Verifier 增加六个固定章节校验；Writer 引用只来自 Specialist citations，并按 `citation_id` 去重。
+- graph/API 测试继续使用依赖注入和 mock graph，不调用真实 LLM、RAG、Milvus 或 Embedding。
+- Phase C-C5 新增 5 个最小 smoke/eval case，覆盖综合问题、纯技术、纯质量、信息不足和诱导过度承诺。
+- 新增真实 API + graph 编排 + SQLite 持久化的最小 E2E 测试，验证 POST、run 查询、steps 查询、六章节报告、审核结果和引用。
+- 新增节点失败验收：run 保存为 `failed`，已完成步骤和失败步骤均保留，后续步骤标记为 `skipped`。
+- Reviewer 增加绝对质量承诺检查；Writer 将零缺陷等诉求改写为待质量、合同和授权审批人确认，不直接作结果保证。
+- 新增 `SALES_COLLABORATION_BASELINE.md`，记录 5 个可重复 mock baseline 和尚待真实 live baseline 补充的指标。
+- C5 回归确认既有 FMEA、Audit、Report API snapshot 和主聊天测试均未受影响。
 
 ### 验收标准
 
@@ -259,19 +291,45 @@ Phase B-B1、B-B2 和 B-B3 已完成；错误码契约和进入 Phase C 前的�
 ### 测试命令
 
 ```powershell
-pytest tests/test_sales_collaboration_graph.py tests/test_sales_proposal_api.py -q
+pytest tests/test_sales_collaboration_e2e.py
+pytest tests/test_sales_collaboration_api.py
+pytest tests/test_sales_collaboration_graph.py
+pytest tests/test_sales_planner.py
+pytest tests/test_sales_reviewer.py
+pytest tests/test_sales_proposal_writer.py
+pytest tests/test_sales_specialists.py
+pytest
 ```
 
-测试文件尚未创建。
+记录结果：
+
+```text
+8 passed, 1 warning in 1.26s
+6 passed, 1 warning in 1.16s
+3 passed in 0.40s
+5 passed in 0.12s
+6 passed in 0.13s
+6 passed in 0.13s
+4 passed in 0.12s
+123 passed, 1 warning in 2.62s
+```
 
 ### 当前状态
 
-`Not Started`
+`Completed`
+
+Phase C-C1 至 C-C5 的最小串行多智能体 MVP 已完成并通过自动化验收。Phase D、E、F 尚未开始。
 
 ### 遗留问题
 
-- 依赖 Phase B 完成并验收。
-- API 路径和持久化模型尚未最终确定。
+- Planner 和 Proposal Writer 已具备真实结构化 LLM 路径，但尚未执行外部模型集成测试。
+- Reviewer 当前默认只执行确定性规则；可选 LLM 审核接口已预留但默认关闭。
+- R&D、Quality Specialist 已具备真实调用路径，但尚未执行外部 LLM、Milvus 和 Embedding 的集成测试。
+- graph 内的 `persist_run` 仍是轻量节点，真实数据库提交由 API/repository 在 graph 返回后统一执行。
+- graph 进程在返回最终 state 前发生未捕获异常时，只能保存 failed run，无法恢复尚未返回的内存步骤。
+- 当前没有销售协作前端页面，不支持并发执行，也不会自动调用 FMEA、Audit 或 Report。
+- 当前只有 5 个 smoke cases，不是 Phase E 的完整质量评估集。
+- 单步恢复、幂等请求、实际定向修复执行和真实调用指标尚未实现。
 
 ### 相关 Commit Hash
 
@@ -739,10 +797,88 @@ pytest tests -q
 
 `TBD`
 
-## 14. 更新记录
+## 14. 专项整改：表格摘要命中后的关联行块二次排序
+
+### 背景
+
+当前大表格采用 `table_parent + table_summary + table_row_block` 的多粒度入库方式：
+
+- `table_parent` 保存完整表格，只用于回溯，不参与向量检索。
+- `table_summary` 保存列名、样例行和高频关键词，用于宽泛召回。
+- `table_row_block` 保存表头和分组数据行，用于提供具体表格内容。
+
+在线检索命中 `table_summary` 后，系统会根据共同的 `table_id` 查询关联的
+`table_row_block`，并固定补充最多 3 个行块。
+
+当前实现只通过 `table_id` 建立关联，没有使用原始 Query 对关联行块进行二次相关性排序。
+因此，被补充的 3 个行块不一定是与用户问题最相关的数据行，可能出现摘要召回正确、
+但具体行块选择不准确的问题。
+
+### 目标
+
+在保持表格宽泛召回能力的同时，提高关联行块的选择准确性，减少无关表格行进入模型上下文，
+并控制大表格展开后的 Token 消耗。
+
+### 计划方案
+
+- [ ] 当 `table_summary` 被向量检索召回时，读取其 `table_id`。
+- [ ] 查询该 `table_id` 下全部或受控数量的 `table_row_block` 候选。
+- [ ] 使用原始用户 Query 对候选行块执行表内二次相关性计算。
+- [ ] 优先复用当前 Query Embedding，避免重复调用 Embedding API。
+- [ ] 按相似度选取表内 Top-K 行块，默认仍限制为 3 个。
+- [ ] 对相似度接近的候选使用 `row_range` 或稳定 ID 作为确定性排序兜底。
+- [ ] 保留 `table_id`、`parent_chunk_uid` 和 `row_range`，确保引用与完整表格回溯能力不受影响。
+- [ ] 候选行块为空或二次排序失败时，降级到稳定的行号顺序，而不是让整个 RAG 请求失败。
+- [ ] 将表内候选数量、最终 Top-K 和最低相关性阈值改为可配置参数。
+
+### 建议实现位置
+
+- `tools/rag.py`
+  - 调整 `_expand_table_chunks`，使其接收原始 Query 或 Query Embedding。
+  - 增加关联行块候选查询、二次打分、Top-K 选择和降级逻辑。
+- `config.py`
+  - 增加表内候选数量、表内 Top-K 和可选最低相似度配置。
+- `tests/`
+  - 增加表格摘要展开与表内排序单元测试。
+  - 使用 Fake Embedding 和 Fake Milvus Client，默认测试不得依赖外部服务。
+
+### 评测指标
+
+- 表格行块 `Recall@K`：标准答案所在行块是否进入最终展开结果。
+- 表格行块 `MRR`：标准答案所在行块在展开结果中的排序位置。
+- 无关行块比例：最终送入模型的行块中与问题无关的比例。
+- 上下文增量：摘要展开前后增加的字符数或 Token 数。
+- 检索延迟：二次排序引入的额外耗时。
+
+### 验收标准
+
+- [ ] 命中 `table_summary` 后，最终行块由原始 Query 相关性决定，不再依赖无明确顺序的固定 `limit=3`。
+- [ ] 相同 Query 和相同知识库版本下，行块排序结果稳定。
+- [ ] 二次排序失败时能够降级，并保留可用检索结果。
+- [ ] 不改变普通文本、小表格和未命中 `table_summary` 时的现有检索行为。
+- [ ] 引用中的 `table_id`、`row_range`、`chunk_uid` 和 `parent_chunk_uid` 保持正确。
+- [ ] 新增自动化测试覆盖摘要命中、多个关联行块、Top-K、去重和失败降级场景。
+- [ ] 在表格专项 QA 集上，表格行块 `Recall@3` 不低于当前实现，且无关行块比例下降。
+
+### 阶段归属
+
+该整改属于 RAG 检索质量专项，可在 Phase E 质量评测期间建立基线并实施。
+在缺少表格专项评测集前，不以主观样例替代指标结论；整改结果应纳入 Phase E 的质量、
+延迟和成本对比报告。
+
+### 当前状态
+
+`Not Started`
+
+## 15. 更新记录
 
 | 日期 | Phase | 更新内容 | 更新人 | Commit |
 | --- | --- | --- | --- | --- |
 | 2026-06-08 | A | 建立阶段执行记录；登记 Phase A 最小回归测试结果 | Codex | `TBD` |
 | 2026-06-08 | B | 完成 B-B1 schema/state 与 B-B2 run/step 持久化模型、migration 和测试 | Codex | `TBD` |
 | 2026-06-08 | B | 完成 B-B3 Schema、State、DB Model 关系文档和 tracker 同步 | Codex | `TBD` |
+| 2026-06-09 | C | 完成 C-C1 串行 mock graph、步骤状态流转、持久化扩展点和单元测试 | Codex | `TBD` |
+| 2026-06-09 | C | 完成 C-C2 R&D/Quality Specialist 包装层、引用映射、无检索降级和 mock 单元测试 | Codex | `TBD` |
+| 2026-06-09 | C | 完成 C-C3 销售协作生成/查询 API、run/step 持久化、权限隔离和失败保存测试 | Codex | `TBD` |
+| 2026-06-09 | C | 完成 C-C4 结构化 Planner、规则 Reviewer、证据约束 Proposal Writer 和六章节校验 | Codex | `TBD` |
+| 2026-06-09 | C | 完成 C-C5 五类 smoke case、最小 E2E、失败场景验收和 baseline 文档；Phase C 标记 Completed | Codex | `TBD` |

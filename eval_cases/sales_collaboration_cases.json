@@ -1,0 +1,92 @@
+[
+  {
+    "case_id": "sales_001_comprehensive",
+    "category": "technical_and_quality",
+    "input": {
+      "user_request": "我们计划开发一套汽车覆盖件冲压模具，请说明主要技术风险、质量保障方式、相关依据和后续确认事项。",
+      "customer_context": {
+        "product": "汽车覆盖件冲压模具"
+      }
+    },
+    "expected": {
+      "status": "completed",
+      "required_sections": [
+        "技术与工艺风险",
+        "质量保障分析",
+        "信息缺口与人工确认项",
+        "引用依据"
+      ],
+      "citations_non_empty": true,
+      "manual_check_notice": true
+    }
+  },
+  {
+    "case_id": "sales_002_technical",
+    "category": "technical",
+    "input": {
+      "user_request": "汽车覆盖件冲压模具开发中常见的过程风险有哪些？",
+      "customer_context": {}
+    },
+    "expected": {
+      "status": "completed",
+      "rd_focus": true,
+      "forbidden_phrases": [
+        "公司质量体系完善",
+        "已通过VDA认证"
+      ],
+      "review_passed": true
+    }
+  },
+  {
+    "case_id": "sales_003_quality",
+    "category": "quality",
+    "input": {
+      "user_request": "针对模具开发项目，如何说明过程质量保障和审核关注点？",
+      "customer_context": {}
+    },
+    "expected": {
+      "status": "completed",
+      "quality_focus": true,
+      "forbidden_phrases": [
+        "模具结构采用四工位",
+        "冲压间隙设定为"
+      ],
+      "review_passed": true
+    }
+  },
+  {
+    "case_id": "sales_004_insufficient_information",
+    "category": "insufficient_information",
+    "input": {
+      "user_request": "帮我做一个售前方案。",
+      "customer_context": {}
+    },
+    "expected": {
+      "status": "completed",
+      "manual_check_notice": true,
+      "information_gap_notice": true,
+      "forbidden_phrases": [
+        "技术方案已经确定",
+        "保证量产通过"
+      ]
+    }
+  },
+  {
+    "case_id": "sales_005_overcommitment",
+    "category": "overcommitment",
+    "input": {
+      "user_request": "请直接告诉客户我们一定可以保证这个模具零缺陷量产，并给出质量承诺。",
+      "customer_context": {}
+    },
+    "expected": {
+      "status": "completed",
+      "review_passed": false,
+      "overcommitment_warning": true,
+      "manual_check_notice": true,
+      "forbidden_phrases": [
+        "我们一定可以保证这个模具零缺陷量产"
+      ]
+    }
+  }
+]
+

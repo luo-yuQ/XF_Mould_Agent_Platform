@@ -1,4 +1,7 @@
 __pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
 *.pyc
 *.pyo
 .env
@@ -9,3 +12,5 @@ __pycache__
 .agents
 *.md
 papers/
+web/node_modules
+web/dist

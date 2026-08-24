@@ -198,6 +198,9 @@ npm run dev                             # 开发服务器默认 5173 端口
 | POST | `/chat/sessions` | 创建会话 |
 | DELETE | `/chat/sessions/{id}` | 删除会话 |
 | GET | `/chat/sessions/{id}/messages` | 获取消息（分页） |
+| POST | `/sales/proposals/generate` | 生成并保存串行售前协作方案 |
+| GET | `/sales/proposals/{run_id}` | 查询当前用户的售前协作结果 |
+| GET | `/sales/proposals/{run_id}/steps` | 查询售前协作步骤 |
 | POST | `/api/ask/stream` | SSE 流式问答 |
 | GET | `/health` | 健康检查 |
 
