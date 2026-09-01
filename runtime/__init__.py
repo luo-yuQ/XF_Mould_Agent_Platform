@@ -7,6 +7,7 @@ from runtime.tenant_context import (
     ensure_same_tenant,
     require_tenant_context,
 )
+from runtime.service import RuntimeCoreService
 
 __all__ = [
     "InvalidRunTransition",
@@ -15,4 +16,5 @@ __all__ = [
     "TenantContext",
     "ensure_same_tenant",
     "require_tenant_context",
+    "RuntimeCoreService",
 ]

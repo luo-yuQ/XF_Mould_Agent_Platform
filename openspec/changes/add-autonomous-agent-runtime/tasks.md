@@ -4,7 +4,8 @@
 - [ ] 1.2 Add Celery and Redis configuration with separate Run and ingestion queue names; verify a local Celery worker starts and accepts one smoke task.
 - [x] 1.3 Define versioned schemas for Run, ActionDecision, ActionResult, StateSnapshot, EvidenceSet, ToolResult, TraceEvent, FileVersion, and IngestionJob including mandatory `tenant_id`; verify schema tests cover valid and invalid payloads.
 - [ ] 1.4 Add tenant-boundary validation shared by Run creation, file upload, ingestion, retrieval, and tool execution; verify a missing or mismatched tenant is rejected before dispatch.
-- [ ] 1.5 Add additive PostgreSQL persistence for Runs, action events, checkpoints, files, file versions, and ingestion jobs; verify migrations apply on a clean database without changing existing tables' behavior.
+- [x] 1.5 Add additive persistence for core Runtime Runs, State snapshots, action records, TraceEvents, and Checkpoints; verify isolated persistence tests pass, the Runtime migration renders successfully, and existing tables are not modified.
+- [ ] 1.6 Add additive PostgreSQL persistence for files, file versions, and ingestion jobs; verify the knowledge-ingestion migration applies on a clean database without changing existing tables' behavior.
 
 ## 2. Run lifecycle and Agent Loop
 

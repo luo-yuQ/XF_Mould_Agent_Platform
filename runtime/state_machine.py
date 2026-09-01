@@ -10,31 +10,16 @@ class InvalidRunTransition(ValueError):
 
 
 _ALLOWED_TRANSITIONS: dict[RunStatus, frozenset[RunStatus]] = {
-    RunStatus.QUEUED: frozenset({RunStatus.RUNNING, RunStatus.CANCELLED}),
-    RunStatus.RUNNING: frozenset(
-        {
-            RunStatus.WAITING_FOR_USER,
-            RunStatus.WAITING_FOR_APPROVAL,
-            RunStatus.COMPLETED,
-            RunStatus.FAILED,
-            RunStatus.CANCELLED,
-            RunStatus.TIMED_OUT,
-        }
-    ),
-    RunStatus.WAITING_FOR_USER: frozenset({RunStatus.RUNNING, RunStatus.CANCELLED}),
-    RunStatus.WAITING_FOR_APPROVAL: frozenset({RunStatus.RUNNING, RunStatus.CANCELLED}),
+    RunStatus.QUEUED: frozenset({RunStatus.RUNNING, RunStatus.FAILED}),
+    RunStatus.RUNNING: frozenset({RunStatus.COMPLETED, RunStatus.FAILED}),
     RunStatus.COMPLETED: frozenset(),
     RunStatus.FAILED: frozenset(),
-    RunStatus.CANCELLED: frozenset(),
-    RunStatus.TIMED_OUT: frozenset(),
 }
 
 _TERMINAL_STATES = frozenset(
     {
         RunStatus.COMPLETED,
         RunStatus.FAILED,
-        RunStatus.CANCELLED,
-        RunStatus.TIMED_OUT,
     }
 )
 

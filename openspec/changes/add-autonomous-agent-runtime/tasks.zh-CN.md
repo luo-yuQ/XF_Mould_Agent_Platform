@@ -1,10 +1,11 @@
 ## 1. Runtime 基础和契约
 
-- [ ] 1.1 建立独立的 Runtime 模块边界，覆盖 Run、Loop、State、Context、Event、Tool、Capability、Knowledge 和 Worker，并且不修改现有业务图；通过新模块导入检查验证。
+- [x] 1.1 建立独立的 Runtime 模块边界，覆盖 Run、Loop、State、Context、Event、Tool、Capability、Knowledge 和 Worker，并且不修改现有业务图；通过新模块导入检查验证。
 - [ ] 1.2 增加 Celery 和 Redis 配置，为 Run 和知识入库设置独立队列；通过启动本地 Celery Worker 并成功执行一个 Smoke Task 验证。
-- [ ] 1.3 定义带版本的 Run、ActionDecision、ActionResult、StateSnapshot、EvidenceSet、ToolResult、TraceEvent、FileVersion 和 IngestionJob Schema，并包含必填的 `tenant_id`；通过 Schema 测试覆盖合法和非法载荷。
+- [x] 1.3 定义带版本的 Run、ActionDecision、ActionResult、StateSnapshot、EvidenceSet、ToolResult、TraceEvent、FileVersion 和 IngestionJob Schema，并包含必填的 `tenant_id`；通过 Schema 测试覆盖合法和非法载荷。
 - [ ] 1.4 为 Run 创建、文件上传、入库、检索和 Tool 执行增加统一的租户边界校验；通过测试验证缺少租户或租户不匹配时会在派发前被拒绝。
-- [ ] 1.5 增加 Run、动作 Event、Checkpoint、文件、文件版本和入库任务的 PostgreSQL 持久化；通过在干净数据库上执行迁移验证，并确认不改变已有表行为。
+- [x] 1.5 增加 Runtime 核心 Run、State Snapshot、动作记录、TraceEvent 和 Checkpoint 的持久化；通过隔离持久化测试和迁移 SQL 生成验证，并确认不修改已有表行为。
+- [ ] 1.6 增加文件、文件版本和入库任务的 PostgreSQL 持久化；通过在干净数据库上执行知识入库迁移验证，并确认不改变已有表行为。
 
 ## 2. Run 生命周期和 Agent Loop
 
